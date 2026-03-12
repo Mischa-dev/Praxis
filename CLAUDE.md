@@ -120,6 +120,19 @@ Everything is configurable via `manifest.yaml`:
 - **Don't use spinners for loading states.** Use shimmer/skeleton placeholders.
 - **Don't forget error states.** Every view needs loading, empty, and error states.
 
+## Build & Launch
+
+**ALWAYS run `pnpm build` after making code changes.** The app is launched via a
+desktop shortcut (`praxis.sh`) which runs the compiled output in `out/`. If you
+don't rebuild, the user will launch stale code and wonder why nothing changed.
+
+```bash
+pnpm build          # Compile everything
+./praxis.sh         # Launch the app (or click the desktop shortcut)
+```
+
+This is non-negotiable — every code change session must end with a successful build.
+
 ## Testing
 
 - Unit tests in `__tests__/` directories (Vitest)
