@@ -59,7 +59,7 @@ import type {
 } from './types'
 import { useModuleStore } from '../../stores/module-store'
 import { usePipelineStore } from '../../stores/pipeline-store'
-import { useTargetStore } from '../../stores/target-store'
+import { useEntityStore } from '../../stores/entity-store'
 import { useUiStore } from '../../stores/ui-store'
 import type { Module } from '@shared/types'
 import type {
@@ -190,8 +190,7 @@ function ExecutionPanel({
 function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
   const modules = useModuleStore((s) => s.modules)
   const navigate = useUiStore((s) => s.navigate)
-  const targets = useTargetStore((s) => s.targets)
-  const activeTargetId = useTargetStore((s) => s.activeTargetId)
+  const activeTargetId = useEntityStore((s) => s.activeEntityId)
   const {
     savePipeline,
     updatePipeline,

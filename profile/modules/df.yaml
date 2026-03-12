@@ -1,0 +1,41 @@
+id: df
+name: "df"
+description: "Report file system disk space usage"
+category: system
+command: df
+tags: [disk, storage, filesystem, system]
+
+arguments:
+  - id: human
+    name: "Human Readable"
+    flag: "-h"
+    type: flag
+    default_enabled: true
+    help: "Print sizes in human-readable format (e.g. 1G, 256M)"
+  - id: type
+    name: "Filesystem Type"
+    flag: "-t"
+    type: text
+    help: "Only show filesystems of this type (e.g. ext4, tmpfs)"
+  - id: exclude_type
+    name: "Exclude Type"
+    flag: "-x"
+    type: text
+    help: "Exclude filesystems of this type"
+  - id: total
+    name: "Show Total"
+    flag: "--total"
+    type: flag
+    help: "Show a grand total row at the bottom"
+  - id: path
+    name: "Path"
+    type: positional
+    position: last
+    help: "Show only the filesystem containing this path"
+
+output:
+  parser: regex
+  patterns:
+    - name: filesystem
+      pattern: "^(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)"
+      fields: [filesystem, size, used, available, use_pct, mount_point]

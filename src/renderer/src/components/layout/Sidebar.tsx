@@ -35,6 +35,8 @@ import {
   selectRecentModules,
 } from '../../stores/module-store'
 import { useUiStore } from '../../stores/ui-store'
+import { useEntityStore, selectPrimaryType } from '../../stores/entity-store'
+import { getIcon } from '../../lib/icon-map'
 import type { ViewId, Module, CategoryConfig, ProfileViewConfig } from '@shared/types'
 import { SearchInput } from '../common'
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react'
@@ -78,9 +80,28 @@ const ENGINE_NAV_ITEMS: NavItem[] = [
   { id: 'history', label: 'History', icon: Clock, view: 'history', order: 80 },
 ]
 
-/** Merge engine nav items with profile-declared views */
-function buildNavItems(profileViews?: ProfileViewConfig[]): NavItem[] {
+interface PrimaryEntityInfo {
+  label: string
+  icon: string
+}
+
+/** Merge engine nav items with profile-declared views and schema primary entity */
+function buildNavItems(profileViews?: ProfileViewConfig[], primaryEntity?: PrimaryEntityInfo | null): NavItem[] {
   const items = [...ENGINE_NAV_ITEMS]
+
+  // Replace the hardcoded 'Targets' nav item with schema-driven primary entity
+  if (primaryEntity) {
+    const idx = items.findIndex((i) => i.id === 'targets')
+    if (idx >= 0) {
+      items[idx] = {
+        id: 'entities',
+        label: primaryEntity.label,
+        icon: getIcon(primaryEntity.icon),
+        view: 'entities',
+        order: 20,
+      }
+    }
+  }
 
   if (profileViews) {
     for (const pv of profileViews) {
@@ -213,7 +234,15 @@ function CategorySection({
 export function Sidebar() {
   const categories = useProfileStore(selectCategories)
   const profileViews = useProfileStore((s) => s.manifest?.views)
-  const navItems = useMemo(() => buildNavItems(profileViews), [profileViews])
+  const primaryType = useEntityStore(selectPrimaryType)
+  const primaryEntityInfo = useMemo(
+    () => primaryType ? { label: primaryType.label_plural, icon: primaryType.icon } : null,
+    [primaryType?.label_plural, primaryType?.icon]
+  )
+  const navItems = useMemo(
+    () => buildNavItems(profileViews, primaryEntityInfo),
+    [profileViews, primaryEntityInfo]
+  )
   const { activeView, sidebarCollapsed, sidebarWidth, navigate, toggleSidebar, setSidebarWidth } = useUiStore(
     useShallow((s) => ({
       activeView: s.activeView,

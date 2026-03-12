@@ -3,7 +3,11 @@ import type { Node } from '@xyflow/react'
 import { Button, Dialog } from '../common'
 import type { Module } from '@shared/types'
 import type { ToolNodeData, ConditionNodeData, ForEachNodeData, DelayNodeData, StartNodeData, NoteNodeData } from './types'
-import { useTargetStore } from '../../stores/target-store'
+import { useEntityStore, selectPrimaryType } from '../../stores/entity-store'
+import { getDisplayValue } from '../../lib/schema-utils'
+import type { EntityRecord } from '@shared/types/entity'
+
+const EMPTY_ENTITIES: EntityRecord[] = []
 
 // ---------------------------------------------------------------------------
 // Tool config dialog (existing, extracted)
@@ -278,7 +282,9 @@ export function StartConfigDialog({
   onSave: (data: Partial<StartNodeData>) => void
 }) {
   const data = node.data as unknown as StartNodeData
-  const targets = useTargetStore((s) => s.targets)
+  const primaryType = useEntityStore(selectPrimaryType)
+  const primaryEntityType = useEntityStore((s) => s.schema?.primaryEntity ?? '')
+  const entities = useEntityStore((s) => s.caches[primaryEntityType]?.entities ?? EMPTY_ENTITIES)
   const [targetSource, setTargetSource] = useState<'selected' | 'all-in-scope'>(data.targetSource ?? 'selected')
   const [targetId, setTargetId] = useState<number | undefined>(data.targetId)
   const [label, setLabel] = useState(data.label ?? '')
@@ -306,7 +312,7 @@ export function StartConfigDialog({
             <option value="all-in-scope">All in-scope targets</option>
           </select>
         </div>
-        {targetSource === 'selected' && targets.length > 0 && (
+        {targetSource === 'selected' && entities.length > 0 && (
           <div>
             <label className="block text-xs text-text-secondary mb-1">
               Pinned Target (optional — overrides runtime selection)
@@ -317,9 +323,9 @@ export function StartConfigDialog({
               onChange={(e) => setTargetId(e.target.value ? parseInt(e.target.value) : undefined)}
             >
               <option value="">Use runtime selection</option>
-              {targets.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.value} {t.label ? `(${t.label})` : ''}
+              {entities.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {primaryType ? getDisplayValue(e, primaryType) : String(e.id)}
                 </option>
               ))}
             </select>
@@ -329,11 +335,11 @@ export function StartConfigDialog({
       <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
         <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
         <Button size="sm" onClick={() => {
-          const target = targets.find((t) => t.id === targetId)
+          const entity = entities.find((e) => e.id === targetId)
           onSave({
             targetSource,
             targetId,
-            targetLabel: target?.value,
+            targetLabel: entity && primaryType ? getDisplayValue(entity, primaryType) : undefined,
             label
           })
           onClose()

@@ -314,8 +314,8 @@ export function SettingsView() {
           </SettingRow>
 
           <SettingRow
-            label="Auto-Add Targets"
-            description="Automatically add discovered targets to the board"
+            label="Auto-Add Entities"
+            description="Automatically add discovered entities to the board"
           >
             <Toggle
               size="sm"

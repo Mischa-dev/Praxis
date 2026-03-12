@@ -46,3 +46,6 @@ coverage/
 *.tmp
 *.bak
 *.backup
+
+# Claude Code (AI agent memory & session data)
+.claude/

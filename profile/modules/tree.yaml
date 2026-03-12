@@ -1,0 +1,47 @@
+id: tree
+name: "tree"
+description: "Display directory structure as an indented tree"
+category: filesystem
+command: tree
+tags: [filesystem, directories, visualization]
+
+arguments:
+  - id: path
+    name: "Path"
+    type: positional
+    position: last
+    default: "."
+    help: "Directory to display"
+  - id: level
+    name: "Max Depth"
+    flag: "-L"
+    type: text
+    help: "Max display depth of the directory tree"
+  - id: dirs_only
+    name: "Directories Only"
+    flag: "-d"
+    type: flag
+    help: "List directories only, not files"
+  - id: size
+    name: "Show Sizes"
+    flag: "-s"
+    type: flag
+    help: "Show file sizes"
+  - id: pattern
+    name: "Pattern"
+    flag: "-P"
+    type: text
+    help: "Only show files matching this glob pattern"
+  - id: ignore
+    name: "Ignore Pattern"
+    flag: "-I"
+    type: text
+    help: "Exclude files matching this glob pattern (e.g. node_modules)"
+  - id: all
+    name: "Show Hidden"
+    flag: "-a"
+    type: flag
+    help: "Include hidden files (dotfiles)"
+
+output:
+  parser: lines

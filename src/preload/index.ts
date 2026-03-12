@@ -5,13 +5,6 @@ const INVOKE_CHANNELS = [
   // Tool execution
   'tool:execute',
   'tool:cancel',
-  // Targets
-  'target:add',
-  'target:remove',
-  'target:update',
-  'target:list',
-  'target:get',
-  'target:actions',
   // Scope
   'scope:check',
   'scope:set',
@@ -28,11 +21,6 @@ const INVOKE_CHANNELS = [
   'module:get',
   'module:check-install',
   'module:reload',
-  // Notes
-  'note:add',
-  'note:list',
-  'note:update',
-  'note:remove',
   // Scans
   'scan:list',
   'scan:get',
@@ -52,16 +40,8 @@ const INVOKE_CHANNELS = [
   'pipeline:execute',
   'pipeline:cancel-run',
   'pipeline:run-status',
-  // Credentials
-  'credential:list-all',
-  'credential:update-status',
-  'credential:delete',
   // Command History
   'history:list',
-  // Database / Search
-  'db:query',
-  'db:search',
-  'db:stats',
   // Profile
   'profile:get',
   // Glossary
@@ -75,6 +55,17 @@ const INVOKE_CHANNELS = [
   'report:templates',
   // Notifications
   'notification:desktop',
+  // Generic Entity System
+  'entity:schema',
+  'entity:create',
+  'entity:get',
+  'entity:list',
+  'entity:update',
+  'entity:delete',
+  'entity:detail',
+  'entity:search',
+  'entity:stats',
+  'entity:actions',
   // Window controls
   'window:minimize',
   'window:maximize',

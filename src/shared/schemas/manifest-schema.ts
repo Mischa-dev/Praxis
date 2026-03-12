@@ -9,6 +9,7 @@ import {
   requireObject,
   optionalEnum,
   optionalBoolean,
+  optionalNumber,
   makeResult
 } from './validate'
 

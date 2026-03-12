@@ -19,7 +19,7 @@ import type {
   EvaluatedAction
 } from '@shared/types/action'
 import type { Target, TargetDetail, Service } from '@shared/types/target'
-import type { Vulnerability, Credential, WebPath, Finding } from '@shared/types/results'
+import type { Vulnerability, Credential, Finding, WebPath } from '@shared/types/results'
 import type { Scan } from '@shared/types/scan'
 
 // ---------------------------------------------------------------------------
@@ -250,8 +250,118 @@ function evaluateCondition(
       }
     }
 
+    // ── Generic condition types ──
+
+    case 'entity_exists': {
+      const entities = getEntityArray(ctx, condition.entity)
+      if (!entities) return { match: false }
+      const matched = condition.match
+        ? entities.find((e) => matchesFilters(e, condition.match!))
+        : entities[0]
+      const result = condition.match ? !!matched : entities.length > 0
+      return {
+        match: result,
+        service: condition.entity === 'service' ? matched as unknown as Service : undefined,
+        credential: condition.entity === 'credential' ? matched as unknown as Credential : undefined,
+        vuln: condition.entity === 'vulnerability' ? matched as unknown as Vulnerability : undefined,
+        finding: condition.entity === 'finding' ? matched as unknown as Finding : undefined
+      }
+    }
+
+    case 'entity_count': {
+      const entities = getEntityArray(ctx, condition.entity)
+      if (!entities) return { match: false }
+      const filtered = condition.match
+        ? entities.filter((e) => matchesFilters(e, condition.match!))
+        : entities
+      const count = filtered.length
+      const result = compareOp(count, condition.op, condition.value)
+      return { match: result }
+    }
+
+    case 'field_matches': {
+      const entities = getEntityArray(ctx, condition.entity)
+      if (!entities) return { match: false }
+      try {
+        const regex = new RegExp(condition.pattern, 'i')
+        // For the primary entity (target), check the target directly
+        if (condition.entity === 'target' || condition.entity === ctx.target.type) {
+          const val = (ctx.target as unknown as Record<string, unknown>)[condition.field]
+          return { match: val !== null && val !== undefined && regex.test(String(val)) }
+        }
+        const matched = entities.find((e) => {
+          const val = (e as unknown as Record<string, unknown>)[condition.field]
+          return val !== null && val !== undefined && regex.test(String(val))
+        })
+        return { match: !!matched }
+      } catch {
+        return { match: false }
+      }
+    }
+
+    case 'entity_field_range': {
+      const entities = getEntityArray(ctx, condition.entity)
+      if (!entities) return { match: false }
+      const matched = entities.find((e) => {
+        const val = Number((e as unknown as Record<string, unknown>)[condition.field])
+        if (isNaN(val)) return false
+        if (condition.min !== undefined && val < condition.min) return false
+        if (condition.max !== undefined && val > condition.max) return false
+        return true
+      })
+      return {
+        match: !!matched,
+        service: condition.entity === 'service' ? matched as unknown as Service : undefined
+      }
+    }
+
     default:
       return { match: false }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Generic condition helpers
+// ---------------------------------------------------------------------------
+
+/** Map entity type names to TargetContext arrays */
+function getEntityArray(ctx: TargetContext, entityType: string): unknown[] | null {
+  switch (entityType) {
+    case 'service': return ctx.services
+    case 'vulnerability': return ctx.vulnerabilities
+    case 'credential': return ctx.credentials
+    case 'web_path': return ctx.webPaths
+    case 'finding': return ctx.findings
+    case 'scan': return ctx.scans
+    case 'target': return [ctx.target]
+    default: return null
+  }
+}
+
+/** Check if an entity matches a set of field filters */
+function matchesFilters(entity: unknown, filters: Record<string, unknown>): boolean {
+  const obj = entity as Record<string, unknown>
+  for (const [key, val] of Object.entries(filters)) {
+    const entityVal = obj[key]
+    if (typeof val === 'string' && typeof entityVal === 'string') {
+      if (entityVal.toLowerCase() !== val.toLowerCase()) return false
+    } else if (entityVal !== val) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Compare a number using the given operator */
+function compareOp(a: number, op: string, b: number): boolean {
+  switch (op) {
+    case '==': return a === b
+    case '!=': return a !== b
+    case '>': return a > b
+    case '<': return a < b
+    case '>=': return a >= b
+    case '<=': return a <= b
+    default: return false
   }
 }
 

@@ -1,0 +1,36 @@
+id: lsof
+name: "lsof"
+description: "List open files and the processes using them"
+category: system
+command: lsof
+tags: [files, processes, system, diagnostics]
+
+arguments:
+  - id: port
+    name: "Port"
+    flag: "-i"
+    type: text
+    help: "Show processes using this network port (e.g. :8080, :443)"
+  - id: user
+    name: "User"
+    flag: "-u"
+    type: text
+    help: "Show only files opened by this user"
+  - id: process
+    name: "Process"
+    flag: "-p"
+    type: text
+    help: "Show only files opened by this PID"
+  - id: tcp
+    name: "TCP Only"
+    flag: "-iTCP"
+    type: flag
+    help: "Show only TCP connections"
+  - id: listen
+    name: "Listening Only"
+    flag: "-sTCP:LISTEN"
+    type: flag
+    help: "Show only listening TCP sockets"
+
+output:
+  parser: lines

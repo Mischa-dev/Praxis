@@ -19,7 +19,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useWorkflowStore } from '../../stores/workflow-store'
-import { useTargetStore } from '../../stores/target-store'
+import { useEntityStore, selectPrimaryType, selectActiveEntity } from '../../stores/entity-store'
+import { getDisplayValue } from '../../lib/schema-utils'
 import { useUiStore } from '../../stores/ui-store'
 import { usePipelineStore } from '../../stores/pipeline-store'
 import { Button, Card, Badge, EmptyState, SearchInput } from '../common'
@@ -113,7 +114,9 @@ function WorkflowCard({ workflow, onSelect, hasTarget }: WorkflowCardProps) {
 
 export function WorkflowSelector() {
   const { workflows, loading, error, loadWorkflows } = useWorkflowStore()
-  const activeTargetId = useTargetStore((s) => s.activeTargetId)
+  const activeTargetId = useEntityStore((s) => s.activeEntityId)
+  const activeEntity = useEntityStore(selectActiveEntity)
+  const primaryType = useEntityStore(selectPrimaryType)
   const navigate = useUiStore((s) => s.navigate)
   const [search, setSearch] = useState('')
 
@@ -206,7 +209,7 @@ export function WorkflowSelector() {
       {/* Active target indicator */}
       {activeTargetId ? (
         <p className="text-xs text-text-muted">
-          Target: <span className="text-accent">{useTargetStore.getState().targets.find(t => t.id === activeTargetId)?.value ?? 'Unknown'}</span>
+          Target: <span className="text-accent">{activeEntity && primaryType ? getDisplayValue(activeEntity, primaryType) : 'Unknown'}</span>
         </p>
       ) : (
         <p className="text-xs text-warning">

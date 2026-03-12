@@ -5,6 +5,8 @@ export type EngineViewId =
   | 'home'
   | 'targets'
   | 'target-detail'
+  | 'entities'
+  | 'entity-detail-view'
   | 'tool-form'
   | 'scan-results'
   | 'workflow-view'
@@ -33,6 +35,8 @@ export interface ViewParamsMap {
   home: Record<string, never>
   targets: Record<string, never>
   'target-detail': { targetId: number }
+  entities: Record<string, never>
+  'entity-detail-view': { entityType: string; entityId: number }
   'tool-form': { toolId: string; targetId?: number; autoArgs?: Record<string, unknown> }
   'scan-results': { scanId: number }
   'workflow-view': { workflowId: string }

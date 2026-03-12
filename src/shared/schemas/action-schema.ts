@@ -14,6 +14,7 @@ import {
 
 const RISK_LEVELS = ['passive', 'active', 'intrusive']
 const CONDITION_TYPES = [
+  // Legacy (still supported as aliases)
   'no_scans',
   'service_exists',
   'port_open',
@@ -25,7 +26,12 @@ const CONDITION_TYPES = [
   'product_version',
   'web_path_found',
   'finding_exists',
-  'technology_detected'
+  'technology_detected',
+  // Generic
+  'entity_exists',
+  'entity_count',
+  'field_matches',
+  'entity_field_range'
 ]
 
 function validateCondition(
@@ -83,6 +89,28 @@ function validateCondition(
       break
     case 'technology_detected':
       requireString(c, 'technology', path, errors)
+      break
+    // Generic condition types
+    case 'entity_exists':
+      requireString(c, 'entity', path, errors)
+      break
+    case 'entity_count':
+      requireString(c, 'entity', path, errors)
+      if (typeof c.op !== 'string') {
+        errors.push({ path: `${path}.op`, message: 'entity_count requires op (==, !=, >, <, >=, <=)' })
+      }
+      if (typeof c.value !== 'number') {
+        errors.push({ path: `${path}.value`, message: 'entity_count requires numeric value' })
+      }
+      break
+    case 'field_matches':
+      requireString(c, 'entity', path, errors)
+      requireString(c, 'field', path, errors)
+      requireString(c, 'pattern', path, errors)
+      break
+    case 'entity_field_range':
+      requireString(c, 'entity', path, errors)
+      requireString(c, 'field', path, errors)
       break
   }
 }

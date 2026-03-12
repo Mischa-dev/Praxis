@@ -1,0 +1,32 @@
+id: ps
+name: "ps"
+description: "Report a snapshot of current running processes"
+category: system
+command: ps
+tags: [processes, system, monitoring]
+
+arguments:
+  - id: all
+    name: "All Processes"
+    flag: "aux"
+    type: flag
+    default_enabled: true
+    help: "Show all processes for all users with details"
+  - id: tree
+    name: "Process Tree"
+    flag: "--forest"
+    type: flag
+    help: "Display process hierarchy as a tree"
+  - id: sort
+    name: "Sort By"
+    flag: "--sort"
+    type: select
+    options: ["-%mem", "-%cpu", "-pid", "-start_time"]
+    help: "Sort processes by field"
+
+output:
+  parser: regex
+  patterns:
+    - name: process
+      pattern: "^(\\S+)\\s+(\\d+)\\s+([\\d.]+)\\s+([\\d.]+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(.+)$"
+      fields: [user, pid, cpu_pct, mem_pct, vsz, rss, tty, stat, start, time, command]

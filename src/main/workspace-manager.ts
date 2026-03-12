@@ -19,6 +19,7 @@ import {
 } from 'fs'
 import { WorkspaceDatabase } from './database'
 import type { Workspace, WorkspaceType, WorkspaceScope } from '@shared/types/workspace'
+import type { ResolvedSchema } from '@shared/types/entity'
 import { randomUUID } from 'crypto'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -39,6 +40,16 @@ interface WorkspaceMeta {
 
 let activeDb: WorkspaceDatabase | null = null
 let activeWorkspaceId: string | null = null
+let activeEntitySchema: ResolvedSchema | null = null
+
+/** Set the entity schema to use when opening databases */
+export function setEntitySchema(schema: ResolvedSchema | null): void {
+  activeEntitySchema = schema
+  // If a database is already open, initialize the entity schema on it
+  if (activeDb && schema) {
+    activeDb.initEntitySchema(schema)
+  }
+}
 
 /** Ensure the workspaces directory exists and return its path */
 function getWorkspacesDir(): string {
@@ -164,7 +175,7 @@ export function createWorkspace(
 
   // Initialize the database file (creates tables)
   const dbPath = getDbPath(id)
-  const db = new WorkspaceDatabase(dbPath)
+  const db = new WorkspaceDatabase(dbPath, activeEntitySchema ?? undefined)
   db.close()
 
   return metaToWorkspace(meta)
@@ -189,7 +200,7 @@ export function loadWorkspace(workspaceId: string): Workspace {
     throw new Error(`Workspace database not found: ${dbPath}`)
   }
 
-  activeDb = new WorkspaceDatabase(dbPath)
+  activeDb = new WorkspaceDatabase(dbPath, activeEntitySchema ?? undefined)
   activeWorkspaceId = workspaceId
 
   // Update the last-accessed timestamp

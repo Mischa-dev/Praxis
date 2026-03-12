@@ -7,6 +7,8 @@ import * as yaml from 'js-yaml'
 import { validateManifest } from '@shared/schemas/manifest-schema'
 import type { ProfileManifest, ProfilePaths } from '@shared/types/profile'
 import type { GlossaryTerm } from '@shared/types/glossary'
+import type { ResolvedSchema } from '@shared/types/entity'
+import { loadSchema as loadEntitySchema, clearSchemaCache } from './schema-loader'
 
 /** Resolved absolute paths for each profile directory */
 export interface ResolvedProfilePaths {
@@ -20,6 +22,7 @@ export interface ResolvedProfilePaths {
 
 let cachedManifest: ProfileManifest | null = null
 let cachedGlossary: GlossaryTerm[] | null = null
+let cachedEntitySchema: ResolvedSchema | null = null
 let resolvedPaths: ResolvedProfilePaths | null = null
 
 /**
@@ -134,6 +137,35 @@ export function loadGlossary(): GlossaryTerm[] {
 }
 
 /**
+ * Load the entity schema from profile/schema.yaml.
+ * Returns null if no schema path is configured in the manifest.
+ */
+export function loadEntitySchemaFromProfile(): ResolvedSchema | null {
+  if (cachedEntitySchema) return cachedEntitySchema
+
+  const paths = getResolvedPaths()
+  const manifest = getManifest()
+
+  const schemaRelPath = manifest.paths.schema
+  if (!schemaRelPath) return null
+
+  try {
+    cachedEntitySchema = loadEntitySchema(paths.root, schemaRelPath)
+    return cachedEntitySchema
+  } catch (err) {
+    console.warn('Failed to load entity schema:', err)
+    return null
+  }
+}
+
+/**
+ * Get the loaded entity schema. Returns null if not loaded or not configured.
+ */
+export function getEntitySchema(): ResolvedSchema | null {
+  return cachedEntitySchema
+}
+
+/**
  * Get the loaded manifest. Throws if loadManifest() hasn't been called.
  */
 export function getManifest(): ProfileManifest {
@@ -160,5 +192,7 @@ export function getResolvedPaths(): ResolvedProfilePaths {
 export function clearProfileCache(): void {
   cachedManifest = null
   cachedGlossary = null
+  cachedEntitySchema = null
   resolvedPaths = null
+  clearSchemaCache()
 }

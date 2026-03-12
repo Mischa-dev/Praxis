@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Search, Terminal, Target, GitBranch, Home, Settings, Clock,
-  FileText, Play, Plus, ChevronRight, Monitor, Globe,
-  Network, Link, Mail, Server, Zap, History
+  FileText, Play, Plus, ChevronRight, Monitor, Zap, History
 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/ui-store'
 import { useModuleStore, selectRecentModules } from '../../stores/module-store'
-import { useTargetStore } from '../../stores/target-store'
+import { useEntityStore, selectPrimaryType } from '../../stores/entity-store'
+import { getDisplayValue, getCategoryValue } from '../../lib/schema-utils'
 import { useWorkflowStore } from '../../stores/workflow-store'
 import { shortcutForView } from '../../hooks/useKeyboardShortcuts'
 import type { ViewId } from '@shared/types'
+import type { EntityRecord } from '@shared/types/entity'
+
+const EMPTY_ARR: EntityRecord[] = []
 
 // ── Types ──
 
@@ -62,7 +65,7 @@ function fuzzyMatch(item: PaletteItem, query: string): number {
 
 const KIND_LABELS: Record<PaletteItemKind, string> = {
   tool: 'Tool',
-  target: 'Target',
+  target: 'Entity',
   workflow: 'Workflow',
   view: 'View',
   action: 'Action',
@@ -76,22 +79,11 @@ const KIND_COLORS: Record<PaletteItemKind, string> = {
   action: 'text-severity-medium',
 }
 
-// ── Target type icons ──
+// ── Static navigation items (entity label injected at runtime) ──
 
-const TARGET_TYPE_ICONS: Record<string, React.ReactNode> = {
-  ip: <Monitor className="w-4 h-4" />,
-  domain: <Globe className="w-4 h-4" />,
-  cidr: <Network className="w-4 h-4" />,
-  url: <Link className="w-4 h-4" />,
-  email: <Mail className="w-4 h-4" />,
-  hostname: <Server className="w-4 h-4" />,
-}
-
-// ── Static navigation items ──
-
-const VIEW_ITEMS: Array<{ id: ViewId; label: string; icon: React.ReactNode }> = [
+const BASE_VIEW_ITEMS: Array<{ id: ViewId; label: string; icon: React.ReactNode }> = [
   { id: 'home', label: 'Dashboard', icon: <Home className="w-4 h-4" /> },
-  { id: 'targets', label: 'Targets', icon: <Target className="w-4 h-4" /> },
+  { id: 'targets', label: 'Entities', icon: <Target className="w-4 h-4" /> },
   { id: 'workflow-view', label: 'Workflows', icon: <Play className="w-4 h-4" /> },
   { id: 'pipeline-builder', label: 'Pipeline Builder', icon: <GitBranch className="w-4 h-4" /> },
   { id: 'history', label: 'Command History', icon: <History className="w-4 h-4" /> },
@@ -116,8 +108,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useUiStore((s) => s.navigate)
   const modules = useModuleStore((s) => s.modules)
   const recentModules = useModuleStore(useShallow(selectRecentModules))
-  const targets = useTargetStore((s) => s.targets)
-  const setActiveTarget = useTargetStore((s) => s.setActiveTarget)
+  const primaryType = useEntityStore(selectPrimaryType)
+  const primaryEntityType = useEntityStore((s) => s.schema?.primaryEntity ?? '')
+  const entities = useEntityStore((s) => s.caches[primaryEntityType]?.entities ?? EMPTY_ARR)
+  const setActiveEntity = useEntityStore((s) => s.setActiveEntity)
   const workflows = useWorkflowStore((s) => s.workflows)
 
   // Focus input when opened
@@ -134,11 +128,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const allItems = useMemo((): PaletteItem[] => {
     const items: PaletteItem[] = []
 
+    const entityLabel = primaryType?.label ?? 'Entity'
+    const entityLabelPlural = primaryType?.label_plural ?? 'Entities'
+
     // Quick actions
     items.push({
-      id: 'action:add-target',
-      label: 'Add Target',
-      description: 'Add a new target to the workspace',
+      id: 'action:add-entity',
+      label: `Add ${entityLabel}`,
+      description: `Add a new ${entityLabel.toLowerCase()} to the workspace`,
       kind: 'action',
       icon: <Plus className="w-4 h-4" />,
       onSelect: () => {
@@ -147,8 +144,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       },
     })
 
-    // Navigation views
-    for (const v of VIEW_ITEMS) {
+    // Navigation views — inject schema label for entity nav item
+    const viewItems = BASE_VIEW_ITEMS.map((v) =>
+      v.id === 'targets' ? { ...v, label: entityLabelPlural } : v
+    )
+
+    for (const v of viewItems) {
       items.push({
         id: `view:${v.id}`,
         label: v.label,
@@ -179,18 +180,19 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       })
     }
 
-    // Targets
-    for (const t of targets) {
+    // Primary entities
+    for (const entity of entities) {
+      const displayVal = primaryType ? getDisplayValue(entity, primaryType) : String(entity.id)
+      const category = primaryType ? getCategoryValue(entity, primaryType) : null
       items.push({
-        id: `target:${t.id}`,
-        label: t.label || t.value,
-        description: t.value !== (t.label || t.value) ? t.value : undefined,
+        id: `target:${entity.id}`,
+        label: displayVal,
         kind: 'target',
-        icon: TARGET_TYPE_ICONS[t.type] ?? <Monitor className="w-4 h-4" />,
-        meta: t.type,
+        icon: <Monitor className="w-4 h-4" />,
+        meta: category ?? undefined,
         onSelect: () => {
-          setActiveTarget(t.id)
-          navigate('target-detail', { targetId: t.id })
+          setActiveEntity(entity.id)
+          navigate('entity-detail', { entityId: entity.id })
           onClose()
         },
       })
@@ -212,7 +214,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
 
     return items
-  }, [modules, targets, workflows, navigate, onClose, setActiveTarget])
+  }, [modules, entities, primaryType, workflows, navigate, onClose, setActiveEntity])
 
   // Build recent items from recent modules
   const recentItems = useMemo((): PaletteItem[] => {

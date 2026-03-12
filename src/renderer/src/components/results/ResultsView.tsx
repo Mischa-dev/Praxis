@@ -99,7 +99,7 @@ export function ResultsView({ scanId }: ResultsViewProps) {
         description={error}
         action={
           <Button variant="secondary" onClick={() => navigate('targets')}>
-            Back to Targets
+            Back
           </Button>
         }
       />
@@ -113,7 +113,7 @@ export function ResultsView({ scanId }: ResultsViewProps) {
         description="This scan may have been removed."
         action={
           <Button variant="secondary" onClick={() => navigate('targets')}>
-            Back to Targets
+            Back
           </Button>
         }
       />

@@ -1,10 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
-  Target,
   Activity,
-  Shield,
-  Key,
-  AlertTriangle,
   Play,
   Plus,
   FolderOpen,
@@ -12,15 +8,15 @@ import {
 } from 'lucide-react'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useUiStore } from '../../stores/ui-store'
+import { useEntityStore, selectPrimaryType } from '../../stores/entity-store'
+import { getIcon } from '../../lib/icon-map'
+import { getDisplayValue, getStatusValue } from '../../lib/schema-utils'
 import { Button, Card, Badge, EmptyState } from '../common'
 import type { Scan } from '@shared/types/scan'
-import type { Target as TargetType } from '@shared/types/target'
-import type { DbStatsResponse } from '@shared/types/ipc'
+import type { EntityRecord } from '@shared/types/entity'
 import type { WorkflowDefinition } from '@shared/types/pipeline'
 
-interface DashboardStats extends DbStatsResponse {
-  // Extends the db:stats response directly
-}
+const EMPTY_ENTITIES: EntityRecord[] = []
 
 function StatCard({
   label,
@@ -59,13 +55,13 @@ function StatCard({
   )
 }
 
-function RecentScans({ scans }: { scans: Scan[] }) {
+function RecentExecutions({ scans }: { scans: Scan[] }) {
   const navigate = useUiStore((s) => s.navigate)
 
   if (scans.length === 0) {
     return (
       <p className="text-xs text-text-muted font-sans py-4 text-center">
-        No scans yet. Run a tool to see results here.
+        No executions yet. Run a tool to see results here.
       </p>
     )
   }
@@ -150,47 +146,49 @@ function QuickWorkflows() {
   )
 }
 
-function RecentTargets({ targets }: { targets: TargetType[] }) {
+function RecentEntities({ entities, primaryType }: {
+  entities: EntityRecord[]
+  primaryType: { label: string; icon: string; fields: Record<string, unknown> } | null
+}) {
   const navigate = useUiStore((s) => s.navigate)
+  const setActiveEntity = useEntityStore((s) => s.setActiveEntity)
+  const PrimaryIcon = primaryType ? getIcon(primaryType.icon) : Activity
 
-  if (targets.length === 0) {
+  if (entities.length === 0) {
+    const label = primaryType?.label?.toLowerCase() ?? 'entity'
     return (
       <p className="text-xs text-text-muted font-sans py-4 text-center">
-        No targets yet. Add a target to begin.
+        No {label}s yet. Add one to begin.
       </p>
     )
   }
 
   return (
     <div className="flex flex-col divide-y divide-border">
-      {targets.map((t) => (
-        <button
-          key={t.id}
-          onClick={() => navigate('target-detail', { targetId: t.id })}
-          className="flex items-center gap-3 px-3 py-2 hover:bg-bg-elevated transition-colors text-left"
-        >
-          <Target className="w-3.5 h-3.5 text-accent shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-mono text-text-primary truncate">{t.value}</p>
-            {t.label && (
-              <p className="text-[10px] font-sans text-text-muted truncate">{t.label}</p>
-            )}
-          </div>
-          <Badge
-            variant={
-              t.status === 'compromised'
-                ? 'error'
-                : t.status === 'scanning'
-                  ? 'accent'
-                  : t.status === 'scanned'
-                    ? 'success'
-                    : 'default'
-            }
+      {entities.slice(0, 8).map((entity) => {
+        const displayVal = primaryType ? getDisplayValue(entity, primaryType as never) : String(entity.id)
+        const status = primaryType ? getStatusValue(entity, primaryType as never) : null
+        return (
+          <button
+            key={entity.id}
+            onClick={() => {
+              setActiveEntity(entity.id)
+              navigate('target-detail', { entityId: entity.id })
+            }}
+            className="flex items-center gap-3 px-3 py-2 hover:bg-bg-elevated transition-colors text-left"
           >
-            {t.status.toUpperCase()}
-          </Badge>
-        </button>
-      ))}
+            <PrimaryIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-mono text-text-primary truncate">{displayVal}</p>
+            </div>
+            {status && (
+              <Badge variant="default">
+                {status.toUpperCase()}
+              </Badge>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -203,32 +201,40 @@ export function ProjectDashboard({ onShowProjects }: ProjectDashboardProps) {
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace)
   const navigate = useUiStore((s) => s.navigate)
 
-  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const primaryType = useEntityStore(selectPrimaryType)
+  const schema = useEntityStore((s) => s.schema)
+  const primaryEntityType = schema?.primaryEntity ?? ''
+  const entities = useEntityStore((s) => s.caches[primaryEntityType]?.entities ?? EMPTY_ENTITIES)
+  const loadEntities = useEntityStore((s) => s.loadEntities)
+  const entityStats = useEntityStore((s) => s.stats)
+  const loadStats = useEntityStore((s) => s.loadStats)
+
   const [recentScans, setRecentScans] = useState<Scan[]>([])
-  const [targets, setTargets] = useState<TargetType[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [statsRes, scansRes, targetsRes] = await Promise.all([
-        window.api.invoke('db:stats'),
+      const [scansRes] = await Promise.all([
         window.api.invoke('scan:list', { limit: 8 }),
-        window.api.invoke('target:list'),
+        primaryEntityType ? loadEntities(primaryEntityType) : Promise.resolve(),
+        loadStats(),
       ])
-      setStats(statsRes as DashboardStats)
       setRecentScans(scansRes as Scan[])
-      setTargets(targetsRes as TargetType[])
     } catch {
-      // Stats might fail if no workspace is loaded — acceptable
+      // Stats might fail if no workspace is loaded
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [primaryEntityType, loadEntities, loadStats])
 
   useEffect(() => {
     loadData()
   }, [loadData, activeWorkspace?.id])
+
+  const primaryLabel = primaryType?.label ?? 'Entity'
+  const primaryLabelPlural = primaryType?.label_plural ?? 'Entities'
+  const PrimaryIcon = primaryType ? getIcon(primaryType.icon) : Activity
 
   if (!activeWorkspace) {
     return (
@@ -263,6 +269,41 @@ export function ProjectDashboard({ onShowProjects }: ProjectDashboardProps) {
     )
   }
 
+  // Build stat cards from schema entity types
+  const statCards: { label: string; value: number; icon: React.FC<{ className?: string }>; accent?: string; onClick?: () => void }[] = []
+
+  if (schema) {
+    // Primary entity stat
+    statCards.push({
+      label: primaryLabelPlural,
+      value: entityStats[primaryEntityType] ?? entities.length,
+      icon: PrimaryIcon,
+      accent: 'bg-accent/10 text-accent',
+      onClick: () => navigate('targets'),
+    })
+
+    // Child entity stats
+    for (const [typeId, typeDef] of Object.entries(schema.entities)) {
+      if (typeId === primaryEntityType) continue
+      const count = entityStats[typeId] ?? 0
+      if (count > 0 || statCards.length < 4) {
+        statCards.push({
+          label: typeDef.label_plural,
+          value: count,
+          icon: getIcon(typeDef.icon),
+        })
+      }
+    }
+  }
+
+  // Execution stat
+  statCards.push({
+    label: 'Executions',
+    value: recentScans.length,
+    icon: Activity,
+    accent: 'bg-accent-secondary/10 text-accent-secondary',
+  })
+
   return (
     <div className="p-6 flex flex-col gap-6 overflow-y-auto h-full">
       {/* Project Header */}
@@ -288,67 +329,25 @@ export function ProjectDashboard({ onShowProjects }: ProjectDashboardProps) {
             onClick={() => navigate('targets')}
           >
             <Plus className="w-3.5 h-3.5" />
-            Add Target
+            Add {primaryLabel}
           </Button>
         </div>
       </div>
 
       {/* Stats Grid */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            label="Targets"
-            value={stats.targets}
-            icon={Target}
-            accent="bg-accent/10 text-accent"
-            onClick={() => navigate('targets')}
-          />
-          <StatCard
-            label="Scans"
-            value={stats.scans}
-            icon={Activity}
-            accent="bg-accent-secondary/10 text-accent-secondary"
-          />
-          <StatCard
-            label="Vulnerabilities"
-            value={stats.vulnerabilities}
-            icon={AlertTriangle}
-            accent="bg-severity-high/10 text-severity-high"
-          />
-          <StatCard
-            label="Credentials"
-            value={stats.credentials}
-            icon={Key}
-            accent="bg-accent-purple/10 text-accent-purple"
-          />
-        </div>
-      )}
-
-      {/* Additional mini-stats */}
-      {stats && (stats.services > 0 || stats.findings > 0 || stats.webPaths > 0) && (
-        <div className="flex gap-4 text-xs font-mono text-text-muted">
-          {stats.services > 0 && (
-            <span className="flex items-center gap-1">
-              <Shield className="w-3 h-3" />
-              {stats.services} services
-            </span>
-          )}
-          {stats.findings > 0 && (
-            <span>{stats.findings} findings</span>
-          )}
-          {stats.webPaths > 0 && (
-            <span>{stats.webPaths} web paths</span>
-          )}
-        </div>
-      )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {statCards.slice(0, 4).map((stat) => (
+          <StatCard key={stat.label} {...stat} />
+        ))}
+      </div>
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
+        {/* Recent Executions */}
         <Card padding="none">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <h3 className="text-xs font-sans font-semibold text-text-secondary uppercase tracking-wider">
-              Recent Scans
+              Recent Executions
             </h3>
             {recentScans.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => navigate('history')}>
@@ -356,22 +355,22 @@ export function ProjectDashboard({ onShowProjects }: ProjectDashboardProps) {
               </Button>
             )}
           </div>
-          <RecentScans scans={recentScans} />
+          <RecentExecutions scans={recentScans} />
         </Card>
 
-        {/* Targets */}
+        {/* Primary Entities */}
         <Card padding="none">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <h3 className="text-xs font-sans font-semibold text-text-secondary uppercase tracking-wider">
-              Targets
+              {primaryLabelPlural}
             </h3>
-            {targets.length > 0 && (
+            {entities.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => navigate('targets')}>
                 View All
               </Button>
             )}
           </div>
-          <RecentTargets targets={targets.slice(0, 8)} />
+          <RecentEntities entities={entities} primaryType={primaryType} />
         </Card>
 
         {/* Quick-launch Workflows */}
@@ -393,19 +392,19 @@ export function ProjectDashboard({ onShowProjects }: ProjectDashboardProps) {
           </div>
         </Card>
 
-        {/* Scan Status Summary */}
+        {/* Execution Status Summary */}
         <Card padding="sm">
           <h3 className="text-xs font-sans font-semibold text-text-secondary uppercase tracking-wider mb-3">
-            Scan Status Summary
+            Execution Status
           </h3>
-          <ScanStatusSummary scans={recentScans} />
+          <ExecutionStatusSummary scans={recentScans} />
         </Card>
       </div>
     </div>
   )
 }
 
-function ScanStatusSummary({ scans }: { scans: Scan[] }) {
+function ExecutionStatusSummary({ scans }: { scans: Scan[] }) {
   const counts = {
     completed: scans.filter((s) => s.status === 'completed').length,
     running: scans.filter((s) => s.status === 'running').length,
@@ -418,7 +417,7 @@ function ScanStatusSummary({ scans }: { scans: Scan[] }) {
 
   if (total === 0) {
     return (
-      <p className="text-xs text-text-muted font-sans py-2">No scans recorded.</p>
+      <p className="text-xs text-text-muted font-sans py-2">No executions recorded.</p>
     )
   }
 
@@ -432,7 +431,6 @@ function ScanStatusSummary({ scans }: { scans: Scan[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Stacked bar */}
       <div className="flex h-2 rounded-full overflow-hidden bg-bg-elevated">
         {bars.map((bar) => (
           <div
@@ -442,7 +440,6 @@ function ScanStatusSummary({ scans }: { scans: Scan[] }) {
           />
         ))}
       </div>
-      {/* Legend */}
       <div className="flex flex-wrap gap-3">
         {bars.map((bar) => (
           <div key={bar.key} className="flex items-center gap-1.5">

@@ -2,7 +2,8 @@
 
 export type RiskLevel = 'passive' | 'active' | 'intrusive'
 
-export type ConditionType =
+/** Legacy condition types (still supported as aliases) */
+export type LegacyConditionType =
   | 'no_scans'
   | 'service_exists'
   | 'port_open'
@@ -15,6 +16,15 @@ export type ConditionType =
   | 'web_path_found'
   | 'finding_exists'
   | 'technology_detected'
+
+/** Generic condition types (new) */
+export type GenericConditionType =
+  | 'entity_exists'
+  | 'entity_count'
+  | 'field_matches'
+  | 'entity_field_range'
+
+export type ConditionType = LegacyConditionType | GenericConditionType
 
 export interface ActionConditionBase {
   type: ConditionType
@@ -86,6 +96,37 @@ export interface TechnologyDetectedCondition extends ActionConditionBase {
   technology: string
 }
 
+// ── Generic Condition Types ──
+
+export interface EntityExistsCondition extends ActionConditionBase {
+  type: 'entity_exists'
+  entity: string // Entity type from schema (e.g., 'service', 'vulnerability')
+  match?: Record<string, unknown> // Field filters (e.g., { service_name: 'ssh', state: 'open' })
+}
+
+export interface EntityCountCondition extends ActionConditionBase {
+  type: 'entity_count'
+  entity: string
+  match?: Record<string, unknown>
+  op: '==' | '!=' | '>' | '<' | '>=' | '<='
+  value: number
+}
+
+export interface FieldMatchesCondition extends ActionConditionBase {
+  type: 'field_matches'
+  entity: string
+  field: string
+  pattern: string // Regex pattern
+}
+
+export interface EntityFieldRangeCondition extends ActionConditionBase {
+  type: 'entity_field_range'
+  entity: string
+  field: string
+  min?: number
+  max?: number
+}
+
 export type ActionCondition =
   | NoScansCondition
   | ServiceExistsCondition
@@ -99,6 +140,10 @@ export type ActionCondition =
   | WebPathFoundCondition
   | FindingExistsCondition
   | TechnologyDetectedCondition
+  | EntityExistsCondition
+  | EntityCountCondition
+  | FieldMatchesCondition
+  | EntityFieldRangeCondition
 
 export interface ActionSuggestion {
   id: string

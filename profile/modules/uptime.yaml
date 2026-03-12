@@ -1,0 +1,18 @@
+id: uptime
+name: "uptime"
+description: "Show how long the system has been running and current load averages"
+category: system
+command: uptime
+tags: [system, uptime, load, status]
+
+arguments: []
+
+output:
+  parser: regex
+  patterns:
+    - name: uptime
+      pattern: "up\\s+(.+?),\\s+\\d+ user"
+      fields: [uptime_duration]
+    - name: load
+      pattern: "load average:\\s+([\\d.]+),\\s+([\\d.]+),\\s+([\\d.]+)"
+      fields: [load_1m, load_5m, load_15m]

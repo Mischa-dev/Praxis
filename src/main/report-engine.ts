@@ -16,9 +16,11 @@ import { join } from 'path'
 import { writeFileSync, mkdirSync } from 'fs'
 import { marked } from 'marked'
 import { getDatabase } from './workspace-manager'
+import { getEntitySchema } from './profile-loader'
 import type { Target, Service } from '@shared/types/target'
 import type { Vulnerability, Credential, WebPath, Finding, Severity } from '@shared/types/results'
 import type { Scan } from '@shared/types/scan'
+import type { ResolvedSchema, ResolvedEntityDef, EntityRecord } from '@shared/types/entity'
 import type {
   ReportType,
   ReportFormat,
@@ -37,16 +39,10 @@ interface ReportData {
   title: string
   author: string
   generatedAt: string
-  stats: {
-    targets: number
-    services: number
-    vulnerabilities: number
-    credentials: number
-    scans: number
-    findings: number
-    webPaths: number
-  }
+  stats: Record<string, number>
   targets: TargetReportData[]
+  /** Schema-driven generic data (when entity schema is loaded) */
+  generic?: GenericReportData
 }
 
 interface TargetReportData {
@@ -56,6 +52,15 @@ interface TargetReportData {
   credentials: Credential[]
   webPaths: WebPath[]
   findings: Finding[]
+  scans: Scan[]
+}
+
+/** Schema-driven report data — used when entity schema is available */
+interface GenericReportData {
+  schema: ResolvedSchema
+  primaryEntities: EntityRecord[]
+  /** Children grouped by primary entity ID, then by child type */
+  childrenByEntity: Map<number, Record<string, EntityRecord[]>>
   scans: Scan[]
 }
 
@@ -116,13 +121,55 @@ function gatherReportData(opts: {
     scans: opts.includeScans !== false ? db.listScans({ targetId: target.id }) : []
   }))
 
+  // Try to enrich with generic entity data if schema is available
+  const schema = getEntitySchema()
+  let generic: GenericReportData | undefined
+  if (schema && db.getEntitySchema()) {
+    generic = gatherGenericData(db, schema, opts.targetIds, opts.includeScans !== false)
+  }
+
   return {
     title: opts.title || 'Assessment Report',
     author: opts.author || 'Security Team',
     generatedAt: new Date().toISOString(),
     stats: allStats,
-    targets: targetData
+    targets: targetData,
+    generic
   }
+}
+
+/** Schema-driven data gathering — uses generic entity CRUD */
+function gatherGenericData(
+  db: import('./database').WorkspaceDatabase,
+  schema: ResolvedSchema,
+  targetIds?: number[],
+  includeScans = true
+): GenericReportData {
+  const primaryType = schema.primaryEntity
+  let primaryEntities: EntityRecord[]
+
+  if (targetIds && targetIds.length > 0) {
+    primaryEntities = targetIds
+      .map((id) => db.entityGet(primaryType, id))
+      .filter((e): e is EntityRecord => e !== undefined)
+  } else {
+    primaryEntities = db.entityList(primaryType)
+  }
+
+  const childrenByEntity = new Map<number, Record<string, EntityRecord[]>>()
+  const primaryDef = schema.entities[primaryType]
+
+  for (const entity of primaryEntities) {
+    const children: Record<string, EntityRecord[]> = {}
+    for (const childType of primaryDef.childTypes) {
+      children[childType] = db.entityListChildren(childType, entity.id)
+    }
+    childrenByEntity.set(entity.id, children)
+  }
+
+  const scans = includeScans ? db.listScans({}) : []
+
+  return { schema, primaryEntities, childrenByEntity, scans }
 }
 
 // ---------------------------------------------------------------------------
@@ -464,10 +511,194 @@ function renderVulnerabilityReport(data: ReportData): string {
 }
 
 // ---------------------------------------------------------------------------
+// Generic (schema-driven) renderers
+// ---------------------------------------------------------------------------
+
+/** Get the display-role field value from a generic entity */
+function entityDisplay(entity: EntityRecord, def: ResolvedEntityDef): string {
+  for (const [key, field] of Object.entries(def.fields)) {
+    if (field.role === 'display') return String(entity[key] ?? '')
+  }
+  return String(entity.value ?? entity.name ?? entity.title ?? entity.id ?? '')
+}
+
+/** Get the status-role field value */
+function entityStatus(entity: EntityRecord, def: ResolvedEntityDef): string | null {
+  for (const [key, field] of Object.entries(def.fields)) {
+    if (field.role === 'status') return entity[key] != null ? String(entity[key]) : null
+  }
+  return null
+}
+
+/** Get the category-role field value */
+function entityCategory(entity: EntityRecord, def: ResolvedEntityDef): string | null {
+  for (const [key, field] of Object.entries(def.fields)) {
+    if (field.role === 'category') return entity[key] != null ? String(entity[key]) : null
+  }
+  return null
+}
+
+/** Get visible fields for table rendering (skip json, references, FK columns) */
+function entityVisibleFields(def: ResolvedEntityDef): { key: string; label: string }[] {
+  return Object.entries(def.fields)
+    .filter(([key, field]) => {
+      if (field.references) return false
+      if (field.kind === 'json') return false
+      if (key === def.parentFkColumn) return false
+      return true
+    })
+    .map(([key]) => ({
+      key,
+      label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    }))
+}
+
+/** Render a generic entity table in Markdown */
+function renderEntityTable(entities: EntityRecord[], def: ResolvedEntityDef): string[] {
+  if (entities.length === 0) return []
+  const cols = entityVisibleFields(def)
+  const lines: string[] = [
+    '| ' + cols.map((c) => c.label).join(' | ') + ' |',
+    '| ' + cols.map(() => '---').join(' | ') + ' |'
+  ]
+  for (const e of entities) {
+    lines.push('| ' + cols.map((c) => escapeForTable(String(e[c.key] ?? ''))).join(' | ') + ' |')
+  }
+  lines.push('')
+  return lines
+}
+
+function renderGenericTechnical(data: ReportData): string | null {
+  const g = data.generic
+  if (!g) return null
+  const { schema, primaryEntities, childrenByEntity } = g
+  const primaryDef = schema.entities[schema.primaryEntity]
+
+  const lines: string[] = [
+    `# ${data.title}`,
+    '',
+    `**Report Type:** Technical Report  `,
+    `**Author:** ${data.author}  `,
+    `**Generated:** ${formatDate(data.generatedAt)}  `,
+    '',
+    '---',
+    '',
+    '## Statistics',
+    '',
+    '| Entity Type | Count |',
+    '|-------------|-------|',
+  ]
+
+  for (const [key, val] of Object.entries(data.stats)) {
+    const def = schema.entities[key]
+    const label = def ? def.label_plural : key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    lines.push(`| ${label} | ${val} |`)
+  }
+  lines.push('')
+
+  for (const entity of primaryEntities) {
+    const display = entityDisplay(entity, primaryDef)
+    const status = entityStatus(entity, primaryDef)
+    const category = entityCategory(entity, primaryDef)
+
+    lines.push(`## ${primaryDef.label}: ${display}`, '')
+    if (category) lines.push(`**Type:** ${category}  `)
+    if (status) lines.push(`**Status:** ${status}  `)
+    lines.push('')
+
+    const children = childrenByEntity.get(entity.id) ?? {}
+    for (const childType of primaryDef.childTypes) {
+      const childDef = schema.entities[childType]
+      if (!childDef) continue
+      const childEntities = children[childType] ?? []
+      if (childEntities.length === 0) continue
+
+      lines.push(`### ${childDef.label_plural} (${childEntities.length})`, '')
+      lines.push(...renderEntityTable(childEntities, childDef))
+    }
+
+    lines.push('---', '')
+  }
+
+  return lines.filter((l) => l !== undefined).join('\n')
+}
+
+function renderGenericExecutive(data: ReportData): string | null {
+  const g = data.generic
+  if (!g) return null
+  const { schema, primaryEntities, childrenByEntity } = g
+  const primaryDef = schema.entities[schema.primaryEntity]
+
+  const lines: string[] = [
+    `# ${data.title}`,
+    '',
+    `**Report Type:** Executive Summary  `,
+    `**Author:** ${data.author}  `,
+    `**Generated:** ${formatDate(data.generatedAt)}  `,
+    '',
+    '---',
+    '',
+    '## Overview',
+    '',
+    `This assessment covered **${primaryEntities.length}** ${primaryDef.label_plural.toLowerCase()}.`,
+    '',
+    '## Statistics',
+    '',
+    '| Metric | Count |',
+    '|--------|-------|',
+  ]
+
+  for (const [key, val] of Object.entries(data.stats)) {
+    const def = schema.entities[key]
+    const label = def ? def.label_plural : key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    lines.push(`| ${label} | ${val} |`)
+  }
+  lines.push('')
+
+  // Summary table of primary entities
+  lines.push(
+    `## ${primaryDef.label_plural} Summary`,
+    '',
+  )
+
+  // Build header from visible fields + child counts
+  const visCols = entityVisibleFields(primaryDef).slice(0, 4)
+  const childLabels = primaryDef.childTypes
+    .map((t) => schema.entities[t]?.label_plural)
+    .filter(Boolean) as string[]
+
+  lines.push(
+    '| ' + visCols.map((c) => c.label).join(' | ') + (childLabels.length > 0 ? ' | ' + childLabels.join(' | ') : '') + ' |',
+    '| ' + visCols.map(() => '---').join(' | ') + (childLabels.length > 0 ? ' | ' + childLabels.map(() => '---').join(' | ') : '') + ' |'
+  )
+
+  for (const entity of primaryEntities) {
+    const vals = visCols.map((c) => escapeForTable(String(entity[c.key] ?? '')))
+    const children = childrenByEntity.get(entity.id) ?? {}
+    const childCounts = primaryDef.childTypes.map((t) => String((children[t] ?? []).length))
+    lines.push('| ' + vals.join(' | ') + (childCounts.length > 0 ? ' | ' + childCounts.join(' | ') : '') + ' |')
+  }
+  lines.push('')
+
+  return lines.filter((l) => l !== undefined).join('\n')
+}
+
+// ---------------------------------------------------------------------------
 // Rendering dispatch
 // ---------------------------------------------------------------------------
 
 function renderMarkdown(type: ReportType, data: ReportData): string {
+  // Try generic renderers first when entity schema is available
+  if (data.generic) {
+    const generic = type === 'technical'
+      ? renderGenericTechnical(data)
+      : type === 'executive'
+        ? renderGenericExecutive(data)
+        : renderGenericTechnical(data) // vulnerability report uses technical layout generically
+    if (generic) return generic
+  }
+
+  // Fall back to legacy hardcoded renderers
   switch (type) {
     case 'executive':
       return renderExecutiveSummary(data)

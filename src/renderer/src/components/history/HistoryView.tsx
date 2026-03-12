@@ -12,10 +12,14 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useUiStore } from '../../stores/ui-store'
-import { useTargetStore } from '../../stores/target-store'
+import { useEntityStore, selectPrimaryType } from '../../stores/entity-store'
+import { getDisplayValue } from '../../lib/schema-utils'
 import { useModuleStore } from '../../stores/module-store'
 import { Badge, EmptyState, SearchInput, Button } from '../common'
-import type { CommandHistoryEntry, Target, Module } from '@shared/types'
+import type { CommandHistoryEntry, Module } from '@shared/types'
+import type { EntityRecord } from '@shared/types/entity'
+
+const EMPTY_ENTITIES: EntityRecord[] = []
 
 // ── Helpers ──
 
@@ -65,7 +69,7 @@ interface FilterPanelProps {
   onFromChange: (v: string) => void
   onToChange: (v: string) => void
   onClear: () => void
-  targets: Target[]
+  targets: { id: number; value: string }[]
   modules: Module[]
   hasFilters: boolean
 }
@@ -161,7 +165,7 @@ function FilterPanel({
 
 interface HistoryRowProps {
   entry: CommandHistoryEntry
-  targets: Target[]
+  targets: { id: number; value: string }[]
   modules: Module[]
   onReRun: (entry: CommandHistoryEntry) => void
 }
@@ -269,8 +273,19 @@ const PAGE_SIZE = 50
 
 export function HistoryView() {
   const navigate = useUiStore((s) => s.navigate)
-  const { targets, loadTargets } = useTargetStore()
+  const primaryType = useEntityStore(selectPrimaryType)
+  const primaryEntityType = useEntityStore((s) => s.schema?.primaryEntity ?? '')
+  const rawEntities = useEntityStore((s) => s.caches[primaryEntityType]?.entities ?? EMPTY_ENTITIES)
+  const loadEntities = useEntityStore((s) => s.loadEntities)
   const { modules, loadModules } = useModuleStore()
+
+  const targets = useMemo(() =>
+    rawEntities.map(e => ({
+      id: e.id,
+      value: primaryType ? getDisplayValue(e, primaryType) : String(e.id)
+    })),
+    [rawEntities, primaryType]
+  )
 
   const [entries, setEntries] = useState<CommandHistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -294,11 +309,11 @@ export function HistoryView() {
 
   const hasFilters = !!(toolFilter || targetFilter || statusFilter || fromDate || toDate)
 
-  // Load targets and modules for filter dropdowns
+  // Load entities and modules for filter dropdowns
   useEffect(() => {
-    loadTargets()
+    if (primaryEntityType) loadEntities(primaryEntityType)
     loadModules()
-  }, [loadTargets, loadModules])
+  }, [primaryEntityType, loadEntities, loadModules])
 
   // Build request params from filters
   const requestParams = useMemo(() => {

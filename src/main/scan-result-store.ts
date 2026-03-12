@@ -152,6 +152,100 @@ function storeEntities(scan: Scan, parsed: ParsedResults, toolId: string): void 
   // Can't store entities without a target
   if (!targetId) return
 
+  // Try generic entity storage first (if entity schema is available)
+  const schema = db.getEntitySchema()
+  if (schema) {
+    storeEntitiesGeneric(db, schema, scan, parsed, toolId, targetId)
+  } else {
+    storeEntitiesLegacy(db, scan, parsed, toolId, targetId)
+  }
+}
+
+/** Generic entity storage using schema-driven CRUD */
+function storeEntitiesGeneric(
+  db: import('./database').WorkspaceDatabase,
+  schema: import('@shared/types/entity').ResolvedSchema,
+  scan: Scan,
+  parsed: ParsedResults,
+  toolId: string,
+  targetId: number
+): void {
+  // Map legacy entity slots to schema entity types
+  const entityMapping: Record<string, Record<string, unknown>[]> = {
+    service: parsed.entities.services.map((s) => ({ ...s, discovered_by: toolId })),
+    vulnerability: parsed.entities.vulnerabilities.map((v) => ({ ...v, discovered_by: toolId })),
+    credential: parsed.entities.credentials.map((c) => ({ ...c, source: toolId })),
+    web_path: parsed.entities.webPaths.map((w) => ({ ...w, discovered_by: toolId })),
+    finding: parsed.entities.findings.map((f) => ({ ...f }))
+  }
+
+  // Also include any generic entityRecords from the parser
+  if (parsed.entityRecords) {
+    for (const [entityType, records] of Object.entries(parsed.entityRecords)) {
+      if (!entityMapping[entityType]) {
+        entityMapping[entityType] = records
+      } else {
+        entityMapping[entityType].push(...records)
+      }
+    }
+  }
+
+  for (const [entityType, records] of Object.entries(entityMapping)) {
+    const entityDef = schema.entities[entityType]
+    if (!entityDef) continue
+
+    for (const record of records) {
+      try {
+        // Auto-inject parent ID and scan_id
+        const data: Record<string, unknown> = { ...record }
+
+        // Remove placeholder IDs (id: 0) from parsed results
+        delete data.id
+        delete data.target_id
+        delete data.scan_id
+
+        // Add parent FK
+        if (entityDef.parentFkColumn) {
+          data[entityDef.parentFkColumn] = targetId
+        }
+
+        // Add scan_id if the entity has that field
+        if (entityDef.fields.scan_id) {
+          data.scan_id = scan.id
+        }
+
+        // Remove empty string values and created_at (let DB default)
+        delete data.created_at
+        for (const [key, val] of Object.entries(data)) {
+          if (val === '') data[key] = null
+        }
+
+        db.entityCreate(entityType, data)
+      } catch (err) {
+        console.warn(`Failed to store ${entityType} from scan ${scan.id}:`, err)
+      }
+    }
+  }
+
+  // Update target OS guess from os_detection findings
+  const osFindings = parsed.entities.findings.filter((f) => f.type === 'os_detection')
+  if (osFindings.length > 0 && osFindings[0].description) {
+    try {
+      db.entityUpdate(schema.primaryEntity, targetId, { os_guess: osFindings[0].description })
+    } catch {
+      // Non-critical — OS guess is supplementary
+    }
+  }
+}
+
+/** Legacy entity storage using typed database methods */
+function storeEntitiesLegacy(
+  db: import('./database').WorkspaceDatabase,
+  scan: Scan,
+  parsed: ParsedResults,
+  toolId: string,
+  targetId: number
+): void {
   // Store services
   for (const svc of parsed.entities.services) {
     try {

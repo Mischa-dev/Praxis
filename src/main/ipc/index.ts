@@ -5,9 +5,7 @@ import { ipcMain } from 'electron'
 import { registerProfileHandlers } from './profile-handlers'
 import { registerModuleHandlers } from './module-handlers'
 import { registerWindowHandlers } from './window-handlers'
-import { registerTargetHandlers } from './target-handlers'
 import { registerScopeHandlers } from './scope-handlers'
-import { registerNoteHandlers } from './note-handlers'
 import { registerToolHandlers } from './tool-handlers'
 import { registerScanHandlers } from './scan-handlers'
 import { registerActionHandlers } from './action-handlers'
@@ -16,11 +14,10 @@ import { registerPipelineHandlers } from './pipeline-handlers'
 import { registerPipelineRunHandlers } from './pipeline-run-handlers'
 import { registerWorkspaceHandlers } from './workspace-handlers'
 import { registerHistoryHandlers } from './history-handlers'
-import { registerDbHandlers } from './db-handlers'
 import { registerSettingsHandlers } from './settings-handlers'
 import { registerNotificationHandlers } from './notification-handlers'
 import { registerReportHandlers } from './report-handlers'
-import { registerCredentialHandlers } from './credential-handlers'
+import { registerEntityHandlers } from './entity-handlers'
 
 /**
  * Register all IPC handlers.
@@ -33,9 +30,7 @@ import { registerCredentialHandlers } from './credential-handlers'
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   registerProfileHandlers(ipcMain)
   registerModuleHandlers(ipcMain)
-  registerTargetHandlers(ipcMain)
   registerScopeHandlers(ipcMain)
-  registerNoteHandlers(ipcMain)
   registerToolHandlers(ipcMain)
   registerScanHandlers(ipcMain)
   registerActionHandlers(ipcMain)
@@ -44,10 +39,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   registerPipelineRunHandlers(ipcMain)
   registerWorkspaceHandlers(ipcMain)
   registerHistoryHandlers(ipcMain)
-  registerDbHandlers(ipcMain)
   registerSettingsHandlers(ipcMain)
   registerNotificationHandlers(ipcMain)
   registerReportHandlers(ipcMain)
-  registerCredentialHandlers(ipcMain)
+  registerEntityHandlers(ipcMain)
   registerWindowHandlers(ipcMain, getWindow)
 }

@@ -1,0 +1,34 @@
+id: ip
+name: "ip"
+description: "Show and manage network interfaces, addresses, and routes"
+category: network
+command: ip
+tags: [network, interface, routing, ip]
+
+arguments:
+  - id: object
+    name: "Object"
+    type: positional
+    position: 1
+    required: true
+    default: "addr"
+    help: "What to show: addr, link, route, neigh"
+  - id: action
+    name: "Action"
+    type: positional
+    position: 2
+    default: "show"
+    help: "Action to perform (show, add, del)"
+  - id: color
+    name: "Color"
+    flag: "-c"
+    type: flag
+    help: "Use color output"
+  - id: brief
+    name: "Brief"
+    flag: "-br"
+    type: flag
+    help: "Print brief output"
+
+output:
+  parser: lines

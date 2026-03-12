@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useModuleStore, selectModule } from '../../stores/module-store'
-import { useTargetStore, selectActiveTarget } from '../../stores/target-store'
+import { useEntityStore, selectPrimaryType, selectActiveEntity } from '../../stores/entity-store'
+import { getDisplayValue } from '../../lib/schema-utils'
 import { useUiStore } from '../../stores/ui-store'
 import { useTerminalStore } from '../../stores/terminal-store'
 import { Button, EmptyState } from '../common'
@@ -17,7 +18,9 @@ interface ToolFormProps {
 export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Element {
   const mod = useModuleStore(selectModule(moduleId))
   const loading = useModuleStore((s) => s.loading)
-  const activeTarget = useTargetStore(selectActiveTarget)
+  const activeEntity = useEntityStore(selectActiveEntity)
+  const primaryType = useEntityStore(selectPrimaryType)
+  const activeEntityValue = activeEntity && primaryType ? getDisplayValue(activeEntity, primaryType) : null
   const navigate = useUiStore((s) => s.navigate)
 
   const [formValues, setFormValues] = useState<Record<string, unknown>>({})
@@ -35,8 +38,8 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
         defaults[arg.id] = arg.default
       }
       // Pre-populate target fields from active target
-      if (arg.type === 'target' && activeTarget) {
-        defaults[arg.id] = activeTarget.value
+      if (arg.type === 'target' && activeEntity) {
+        defaults[arg.id] = activeTargetValue
       }
     }
     // Apply autoArgs from action rules (overrides defaults)
@@ -48,7 +51,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
     setFormValues(defaults)
     setErrors({})
     setSubmitError(null)
-  }, [mod, activeTarget, autoArgs])
+  }, [mod, activeEntity, autoArgs])
 
   // ── Field change handler ──
   const handleFieldChange = useCallback(
@@ -152,7 +155,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
       const result = (await window.api.invoke('tool:execute', {
         toolId: moduleId,
         args: allValues,
-        targetId: activeTarget?.id
+        targetId: activeEntity?.id
       })) as { scanId: number }
 
       // Create a terminal session for this scan
@@ -172,7 +175,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
     } finally {
       setExecuting(false)
     }
-  }, [mod, moduleId, formValues, activeTarget, validateAll])
+  }, [mod, moduleId, formValues, activeEntity, validateAll])
 
   // ── Reset form ──
   const handleReset = useCallback(() => {
@@ -182,8 +185,8 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
       if (arg.default !== undefined) {
         defaults[arg.id] = arg.default
       }
-      if (arg.type === 'target' && activeTarget) {
-        defaults[arg.id] = activeTarget.value
+      if (arg.type === 'target' && activeEntity) {
+        defaults[arg.id] = activeTargetValue
       }
     }
     if (autoArgs) {
@@ -194,7 +197,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
     setFormValues(defaults)
     setErrors({})
     setSubmitError(null)
-  }, [mod, activeTarget, autoArgs])
+  }, [mod, activeEntity, autoArgs])
 
   // ── Loading state ──
   if (loading) {
@@ -260,7 +263,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
               formValues={formValues}
               errors={errors}
               onChange={handleFieldChange}
-              activeTargetValue={activeTarget?.value}
+              activeEntityValue={activeTargetValue}
               collapsed={groupIdx > 0}
             />
           ))}
@@ -323,7 +326,7 @@ interface FieldGroupProps {
   formValues: Record<string, unknown>
   errors: Record<string, string>
   onChange: (argId: string, value: unknown) => void
-  activeTargetValue?: string
+  activeEntityValue?: string
   collapsed?: boolean
 }
 
@@ -333,7 +336,7 @@ function FieldGroup({
   formValues,
   errors,
   onChange,
-  activeTargetValue,
+  activeEntityValue,
   collapsed: initialCollapsed
 }: FieldGroupProps) {
   const [collapsed, setCollapsed] = useState(initialCollapsed ?? false)
@@ -373,7 +376,7 @@ function FieldGroup({
               value={formValues[arg.id]}
               onChange={onChange}
               error={errors[arg.id]}
-              activeTargetValue={activeTargetValue}
+              activeEntityValue={activeEntityValue}
             />
           ))}
         </div>

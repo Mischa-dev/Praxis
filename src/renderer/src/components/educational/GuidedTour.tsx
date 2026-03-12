@@ -28,29 +28,29 @@ const tourSteps: TourStep[] = [
   {
     title: 'Welcome',
     description:
-      'This is a guided command center for CLI security tools. It tells you what to do, explains every action, executes tools, parses output, and suggests next steps. You never need to memorize CLI flags.',
+      'This is a guided workflow platform for CLI tools. It generates forms from tool definitions, executes commands, parses output, stores results, and suggests next steps. You never need to memorize CLI flags.',
     icon: <Zap className="w-8 h-8" />,
   },
   {
-    title: 'Target-Centric Workflow',
+    title: 'Entity-Centric Workflow',
     description:
-      'Everything revolves around targets — IPs, domains, URLs. Add a target, and the app tells you what tools you can run against it, what the results mean, and what to do next. New options appear as you discover more about a target.',
+      'Everything revolves around your primary entities — the things you work with. Add one from the sidebar, and the app shows what tools you can run, what results mean, and what to do next. New options appear as you discover more.',
     icon: <Crosshair className="w-8 h-8" />,
     highlight: 'main',
-    hint: 'Navigate to Targets from the sidebar to get started',
+    hint: 'Navigate to your entities from the sidebar to get started',
   },
   {
-    title: 'Adding Targets',
+    title: 'Adding Entities',
     description:
-      'Click "Add Target" on the Targets board. Type an IP address, domain, or URL and the app auto-detects the type. If the target resolves to a cloud provider, you\'ll get a scope warning before proceeding.',
+      'Click the "Add" button on the entity board. Type a value and the app auto-detects the type based on patterns defined in the profile schema.',
     icon: <Plus className="w-8 h-8" />,
     highlight: 'main',
-    hint: 'Try adding a local IP like 192.168.1.1 or a VM address',
+    hint: 'Try adding a value — the type will be detected automatically',
   },
   {
-    title: 'Running Scans',
+    title: 'Running Tools',
     description:
-      'Open a target to see suggested actions — the app tells you what to run based on what it already knows. Click an action to auto-fill the tool form, review the command preview, then hit Execute. Output streams live in the terminal below.',
+      'Open an entity to see suggested actions — the app tells you what to run based on what it already knows. Click an action to auto-fill the tool form, review the command preview, then hit Execute. Output streams live in the terminal below.',
     icon: <Play className="w-8 h-8" />,
     highlight: 'sidebar',
     hint: 'The sidebar lists all available tools organized by category',
@@ -58,15 +58,15 @@ const tourSteps: TourStep[] = [
   {
     title: 'Understanding Results',
     description:
-      'After a scan completes, results are parsed automatically. The app extracts services, vulnerabilities, and credentials, then explains what they mean and suggests logical next steps. Hover any highlighted term for a definition.',
+      'After a tool completes, results are parsed automatically. The app extracts structured data, stores it as child entities, and suggests logical next steps. Hover any highlighted term for a definition.',
     icon: <BarChart3 className="w-8 h-8" />,
     highlight: 'terminal',
-    hint: 'Click a completed scan in Target Detail to see parsed results',
+    hint: 'Click a completed execution in the entity detail to see parsed results',
   },
   {
     title: 'Context Panel',
     description:
-      'The right panel shows your active target, running scans, recent results, and top suggested actions. It updates in real-time as scans complete and new data is discovered. It\'s your mission briefing at a glance.',
+      'The right panel shows your active entity, running tools, and top suggested actions. It updates in real-time as tools complete and new data is discovered.',
     icon: <Lightbulb className="w-8 h-8" />,
     highlight: 'context',
     hint: 'Press Ctrl+J to toggle the terminal pane',

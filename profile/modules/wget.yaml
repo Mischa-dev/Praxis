@@ -1,0 +1,52 @@
+id: wget
+name: "wget"
+description: "Download files from the web via HTTP, HTTPS, or FTP"
+category: transfer
+command: wget
+tags: [download, http, transfer, web]
+
+arguments:
+  - id: url
+    name: "URL"
+    type: positional
+    position: last
+    required: true
+    help: "URL to download"
+  - id: output
+    name: "Output File"
+    flag: "-O"
+    type: text
+    help: "Save to this filename instead of the default"
+  - id: quiet
+    name: "Quiet"
+    flag: "-q"
+    type: flag
+    help: "Suppress output except errors"
+  - id: recursive
+    name: "Recursive"
+    flag: "-r"
+    type: flag
+    help: "Download recursively (follow links)"
+  - id: depth
+    name: "Max Depth"
+    flag: "-l"
+    type: text
+    help: "Maximum recursion depth"
+  - id: continue
+    name: "Continue"
+    flag: "-c"
+    type: flag
+    help: "Resume a partially downloaded file"
+  - id: no_check_cert
+    name: "No Check Cert"
+    flag: "--no-check-certificate"
+    type: flag
+    help: "Skip SSL certificate verification"
+  - id: timeout
+    name: "Timeout"
+    flag: "--timeout"
+    type: text
+    help: "Timeout in seconds for network operations"
+
+output:
+  parser: lines

@@ -1,0 +1,59 @@
+id: find
+name: "find"
+description: "Search for files and directories matching specific criteria"
+category: filesystem
+command: find
+tags: [files, search, filesystem, directories]
+
+arguments:
+  - id: path
+    name: "Search Path"
+    type: positional
+    position: 1
+    required: true
+    default: "."
+    help: "Starting directory to search from"
+  - id: name
+    name: "Name Pattern"
+    flag: "-name"
+    type: text
+    help: "Match files by name (supports wildcards like *.txt, config*)"
+  - id: iname
+    name: "Name (case-insensitive)"
+    flag: "-iname"
+    type: text
+    help: "Like -name but case insensitive"
+  - id: type
+    name: "Type"
+    flag: "-type"
+    type: select
+    options: [f, d, l, s, p]
+    help: "File type: f=file, d=directory, l=symlink, s=socket, p=pipe"
+  - id: size
+    name: "Size"
+    flag: "-size"
+    type: text
+    help: "Match by size (e.g. +100M for files over 100MB, -1k for under 1KB)"
+  - id: mtime
+    name: "Modified Time"
+    flag: "-mtime"
+    type: text
+    help: "Modified N days ago (+N = more than, -N = less than)"
+  - id: maxdepth
+    name: "Max Depth"
+    flag: "-maxdepth"
+    type: text
+    help: "Maximum directory depth to descend"
+  - id: exec
+    name: "Execute"
+    flag: "-exec"
+    type: text
+    help: "Run a command on each match (use {} for filename, end with \\;)"
+  - id: perm
+    name: "Permissions"
+    flag: "-perm"
+    type: text
+    help: "Match files with specific permissions (e.g. 755, /u+x)"
+
+output:
+  parser: lines

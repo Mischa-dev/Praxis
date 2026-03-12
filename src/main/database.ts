@@ -2,9 +2,9 @@
  * Database layer — SQLite via better-sqlite3.
  *
  * Each workspace gets its own database file. This module handles:
- *   - Schema creation and migrations
- *   - CRUD for every entity (targets, services, scans, etc.)
- *   - Compound queries (target detail with all related entities)
+ *   - Engine-managed tables (scans, command_history, pipelines)
+ *   - Schema-driven entity tables (created from profile schema.yaml via schema-ddl.ts)
+ *   - Generic entity CRUD
  */
 
 import Database from 'better-sqlite3'
@@ -25,6 +25,14 @@ import type {
   Severity
 } from '@shared/types/results'
 import type { Pipeline } from '@shared/types/pipeline'
+import type {
+  ResolvedSchema,
+  ResolvedEntityDef,
+  EntityRecord,
+  EntityDetail as GenericEntityDetail,
+  EntityFilter
+} from '@shared/types/entity'
+import { generateDDL, generateMigrationDDL, generateUpsertSQL } from './schema-ddl'
 
 // ---------------------------------------------------------------------------
 // Schema version — bump when adding migrations
@@ -34,45 +42,16 @@ const SCHEMA_VERSION = 1
 // ---------------------------------------------------------------------------
 // Schema DDL
 // ---------------------------------------------------------------------------
+// Engine-managed tables only. Entity tables (targets, services, vulnerabilities, etc.)
+// are created dynamically by schema-ddl.ts from the profile's schema.yaml.
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS targets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  type TEXT NOT NULL CHECK(type IN ('ip','cidr','hostname','domain','url','email')),
-  value TEXT NOT NULL UNIQUE,
-  label TEXT,
-  os_guess TEXT,
-  scope_status TEXT NOT NULL DEFAULT 'unchecked',
-  tags TEXT DEFAULT '[]',
-  notes TEXT,
-  status TEXT NOT NULL DEFAULT 'new',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS services (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-  port INTEGER NOT NULL,
-  protocol TEXT NOT NULL DEFAULT 'tcp',
-  state TEXT NOT NULL DEFAULT 'open',
-  service_name TEXT,
-  product TEXT,
-  service_version TEXT,
-  banner TEXT,
-  tunnel TEXT,
-  confidence INTEGER DEFAULT 0,
-  discovered_by TEXT DEFAULT 'manual',
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(target_id, port, protocol)
-);
-
 CREATE TABLE IF NOT EXISTS scans (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER REFERENCES targets(id),
+  target_id INTEGER,
   tool_id TEXT NOT NULL,
   command TEXT NOT NULL,
   args TEXT DEFAULT '{}',
@@ -88,70 +67,12 @@ CREATE TABLE IF NOT EXISTS scans (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS vulnerabilities (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-  scan_id INTEGER REFERENCES scans(id),
-  service_id INTEGER REFERENCES services(id),
-  title TEXT NOT NULL,
-  severity TEXT CHECK(severity IN ('critical','high','medium','low','info')),
-  cve TEXT,
-  description TEXT,
-  evidence TEXT,
-  explanation TEXT,
-  remediation TEXT,
-  discovered_by TEXT,
-  verified BOOLEAN DEFAULT 0,
-  false_positive BOOLEAN DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS credentials (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER REFERENCES targets(id),
-  scan_id INTEGER REFERENCES scans(id),
-  service_id INTEGER REFERENCES services(id),
-  username TEXT,
-  password TEXT,
-  hash TEXT,
-  hash_type TEXT,
-  status TEXT DEFAULT 'found',
-  source TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS web_paths (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER NOT NULL REFERENCES targets(id) ON DELETE CASCADE,
-  scan_id INTEGER REFERENCES scans(id),
-  path TEXT NOT NULL,
-  status_code INTEGER,
-  content_length INTEGER,
-  title TEXT,
-  redirect_url TEXT,
-  discovered_by TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(target_id, path)
-);
-
-CREATE TABLE IF NOT EXISTS findings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER REFERENCES targets(id),
-  scan_id INTEGER REFERENCES scans(id),
-  type TEXT,
-  title TEXT NOT NULL,
-  description TEXT,
-  severity TEXT,
-  data TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS command_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   scan_id INTEGER REFERENCES scans(id),
   command TEXT NOT NULL,
   tool_id TEXT,
-  target_id INTEGER REFERENCES targets(id),
+  target_id INTEGER,
   exit_code INTEGER,
   duration_ms INTEGER,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -163,15 +84,6 @@ CREATE TABLE IF NOT EXISTS pipelines (
   description TEXT,
   definition TEXT NOT NULL,
   is_builtin BOOLEAN DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS notes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  target_id INTEGER REFERENCES targets(id),
-  title TEXT,
-  content TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -196,12 +108,16 @@ const migrations: Migration[] = [
 
 export class WorkspaceDatabase {
   private db: Database.Database
+  private entitySchema: ResolvedSchema | null = null
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, schema?: ResolvedSchema) {
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
     this.init()
+    if (schema) {
+      this.initEntitySchema(schema)
+    }
 
     // Restrict database file permissions — credentials and scan data are sensitive
     try {
@@ -1037,4 +953,357 @@ export class WorkspaceDatabase {
       findings: count('findings')
     }
   }
+
+  // =========================================================================
+  // GENERIC ENTITY SYSTEM (schema-driven)
+  // =========================================================================
+
+  /** Initialize schema-driven tables alongside the hardcoded ones */
+  initEntitySchema(schema: ResolvedSchema): void {
+    this.entitySchema = schema
+
+    // Create entity tables from schema
+    const ddl = generateDDL(schema)
+    this.db.exec(ddl)
+
+    // Check if schema hash changed and run migration for new columns
+    const currentHash = this.getSchemaMetaValue('schema_hash')
+    const newHash = hashSchema(schema)
+
+    if (currentHash && currentHash !== newHash) {
+      // Schema changed — add new columns
+      const existingColumns = this.getExistingColumns(schema)
+      const migrationSQL = generateMigrationDDL(schema, existingColumns)
+      for (const sql of migrationSQL) {
+        try {
+          this.db.exec(sql)
+        } catch (err) {
+          console.warn('Schema migration statement failed:', sql, err)
+        }
+      }
+    }
+
+    // Store the schema hash
+    this.setSchemaMetaValue('schema_hash', newHash)
+    this.setSchemaMetaValue('schema_version', String(schema.version))
+  }
+
+  /** Get the loaded entity schema */
+  getEntitySchema(): ResolvedSchema | null {
+    return this.entitySchema
+  }
+
+  // ── Schema Meta ──
+
+  private getSchemaMetaValue(key: string): string | null {
+    try {
+      const row = this.db
+        .prepare('SELECT value FROM entity_schema_meta WHERE key = ?')
+        .get(key) as { value: string } | undefined
+      return row?.value ?? null
+    } catch {
+      return null // Table may not exist yet
+    }
+  }
+
+  private setSchemaMetaValue(key: string, value: string): void {
+    this.db
+      .prepare(
+        'INSERT INTO entity_schema_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+      )
+      .run(key, value)
+  }
+
+  private getExistingColumns(schema: ResolvedSchema): Map<string, Set<string>> {
+    const result = new Map<string, Set<string>>()
+    for (const entity of Object.values(schema.entities)) {
+      try {
+        const columns = this.db.pragma(`table_info(${entity.tableName})`) as { name: string }[]
+        result.set(entity.tableName, new Set(columns.map((c) => c.name)))
+      } catch {
+        // Table doesn't exist yet
+      }
+    }
+    return result
+  }
+
+  // ── Generic CRUD ──
+
+  private requireEntityDef(entityType: string): ResolvedEntityDef {
+    if (!this.entitySchema) {
+      throw new Error('Entity schema not initialized')
+    }
+    const def = this.entitySchema.entities[entityType]
+    if (!def) {
+      throw new Error(`Unknown entity type: ${entityType}`)
+    }
+    return def
+  }
+
+  /** Create a new entity record */
+  entityCreate(entityType: string, data: Record<string, unknown>): EntityRecord {
+    const def = this.requireEntityDef(entityType)
+
+    // Validate required fields
+    for (const [fieldId, fieldDef] of Object.entries(def.fields)) {
+      if (fieldDef.required && (data[fieldId] === undefined || data[fieldId] === null)) {
+        if (fieldDef.default === undefined) {
+          throw new Error(`Required field "${fieldId}" is missing for entity type "${entityType}"`)
+        }
+      }
+    }
+
+    // Validate enum values
+    for (const [fieldId, fieldDef] of Object.entries(def.fields)) {
+      if (fieldDef.kind === 'enum' && fieldDef.values && data[fieldId] !== undefined && data[fieldId] !== null) {
+        if (!fieldDef.values.includes(String(data[fieldId]))) {
+          throw new Error(`Invalid value "${data[fieldId]}" for enum field "${fieldId}". Allowed: ${fieldDef.values.join(', ')}`)
+        }
+      }
+    }
+
+    // Build column list and values
+    const columns: string[] = []
+    const placeholders: string[] = []
+    const values: unknown[] = []
+
+    // Parent FK
+    if (def.parentFkColumn) {
+      const parentId = data[def.parentFkColumn]
+      if (parentId !== undefined && parentId !== null) {
+        columns.push(def.parentFkColumn)
+        placeholders.push('?')
+        values.push(parentId)
+      }
+    }
+
+    // User fields
+    for (const [fieldId, fieldDef] of Object.entries(def.fields)) {
+      const val = data[fieldId]
+      if (val !== undefined) {
+        columns.push(fieldId)
+        placeholders.push('?')
+        values.push(fieldDef.kind === 'json' && typeof val === 'object' ? JSON.stringify(val) : val)
+      }
+    }
+
+    // Build SQL
+    let sql = `INSERT INTO ${def.tableName} (${columns.join(', ')})\n       VALUES (${placeholders.join(', ')})`
+
+    // Upsert handling
+    const upsertClause = generateUpsertSQL(def)
+    if (upsertClause) {
+      sql += `\n       ${upsertClause}`
+    }
+
+    sql += '\n       RETURNING *'
+
+    return this.db.prepare(sql).get(...values) as EntityRecord
+  }
+
+  /** Get a single entity by ID */
+  entityGet(entityType: string, id: number): EntityRecord | undefined {
+    const def = this.requireEntityDef(entityType)
+    return this.db
+      .prepare(`SELECT * FROM ${def.tableName} WHERE id = ?`)
+      .get(id) as EntityRecord | undefined
+  }
+
+  /** List entities with optional filters, sorting, and pagination */
+  entityList(entityType: string, filter?: EntityFilter): EntityRecord[] {
+    const def = this.requireEntityDef(entityType)
+
+    const conditions: string[] = []
+    const params: unknown[] = []
+
+    if (filter?.where) {
+      for (const [key, val] of Object.entries(filter.where)) {
+        if (!/^[a-z_]+$/.test(key)) {
+          throw new Error(`Invalid column name: ${key}`)
+        }
+        conditions.push(`${key} = ?`)
+        params.push(val)
+      }
+    }
+
+    let sql = `SELECT * FROM ${def.tableName}`
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ')
+    }
+
+    if (filter?.sort) {
+      if (!/^[a-z_]+$/.test(filter.sort.column)) {
+        throw new Error(`Invalid sort column: ${filter.sort.column}`)
+      }
+      const dir = filter.sort.direction === 'desc' ? 'DESC' : 'ASC'
+      sql += ` ORDER BY ${filter.sort.column} ${dir}`
+    } else {
+      // Default: order by created_at DESC or id DESC
+      const hasCreatedAt = def.timestamps?.includes('created_at')
+      sql += hasCreatedAt ? ' ORDER BY created_at DESC' : ' ORDER BY id DESC'
+    }
+
+    if (filter?.limit) {
+      sql += ' LIMIT ?'
+      params.push(filter.limit)
+    }
+    if (filter?.offset) {
+      sql += ' OFFSET ?'
+      params.push(filter.offset)
+    }
+
+    return this.db.prepare(sql).all(...params) as EntityRecord[]
+  }
+
+  /** Update an entity by ID */
+  entityUpdate(
+    entityType: string,
+    id: number,
+    updates: Record<string, unknown>
+  ): EntityRecord | undefined {
+    const def = this.requireEntityDef(entityType)
+
+    const fields: string[] = []
+    const values: unknown[] = []
+
+    for (const [key, val] of Object.entries(updates)) {
+      if (val === undefined) continue
+      if (key === 'id') continue // Never update the primary key
+
+      // Validate enum values
+      const fieldDef = def.fields[key]
+      if (fieldDef?.kind === 'enum' && fieldDef.values && val !== null) {
+        if (!fieldDef.values.includes(String(val))) {
+          throw new Error(`Invalid value "${val}" for enum field "${key}"`)
+        }
+      }
+
+      fields.push(`${key} = ?`)
+      values.push(fieldDef?.kind === 'json' && typeof val === 'object' ? JSON.stringify(val) : val)
+    }
+
+    if (fields.length === 0) return this.entityGet(entityType, id)
+
+    // Auto-update updated_at if the entity has it
+    if (def.timestamps?.includes('updated_at')) {
+      fields.push('updated_at = CURRENT_TIMESTAMP')
+    }
+
+    values.push(id)
+    this.db
+      .prepare(`UPDATE ${def.tableName} SET ${fields.join(', ')} WHERE id = ?`)
+      .run(...values)
+
+    return this.entityGet(entityType, id)
+  }
+
+  /** Delete an entity by ID */
+  entityRemove(entityType: string, id: number): void {
+    const def = this.requireEntityDef(entityType)
+    this.db.prepare(`DELETE FROM ${def.tableName} WHERE id = ?`).run(id)
+  }
+
+  /** List child entities of a specific parent */
+  entityListChildren(entityType: string, parentId: number): EntityRecord[] {
+    const def = this.requireEntityDef(entityType)
+    if (!def.parentFkColumn) {
+      throw new Error(`Entity type "${entityType}" has no parent`)
+    }
+    return this.db
+      .prepare(`SELECT * FROM ${def.tableName} WHERE ${def.parentFkColumn} = ? ORDER BY id DESC`)
+      .all(parentId) as EntityRecord[]
+  }
+
+  /** Get a primary entity with all its children (generic detail view) */
+  entityGetDetail(entityType: string, id: number): GenericEntityDetail | undefined {
+    if (!this.entitySchema) throw new Error('Entity schema not initialized')
+
+    const entity = this.entityGet(entityType, id)
+    if (!entity) return undefined
+
+    const def = this.entitySchema.entities[entityType]
+    const children: Record<string, EntityRecord[]> = {}
+
+    for (const childType of def.childTypes) {
+      children[childType] = this.entityListChildren(childType, id)
+    }
+
+    return { entity, children }
+  }
+
+  /** Cross-entity search using schema-defined searchable fields */
+  entitySearch(queryStr: string): Record<string, EntityRecord[]> {
+    if (!this.entitySchema) throw new Error('Entity schema not initialized')
+
+    const like = `%${queryStr}%`
+    const results: Record<string, EntityRecord[]> = {}
+
+    for (const [entityId, def] of Object.entries(this.entitySchema.entities)) {
+      if (!def.searchable || def.searchable.length === 0) continue
+
+      const conditions = def.searchable.map((f) => `${f} LIKE ?`).join(' OR ')
+      const params = def.searchable.map(() => like)
+
+      try {
+        results[entityId] = this.db
+          .prepare(`SELECT * FROM ${def.tableName} WHERE ${conditions}`)
+          .all(...params) as EntityRecord[]
+      } catch {
+        results[entityId] = []
+      }
+    }
+
+    return results
+  }
+
+  /** Get entity counts for all schema-defined types */
+  entityStats(): Record<string, number> {
+    if (!this.entitySchema) throw new Error('Entity schema not initialized')
+
+    const counts: Record<string, number> = {}
+    for (const [entityId, def] of Object.entries(this.entitySchema.entities)) {
+      try {
+        const row = this.db
+          .prepare(`SELECT COUNT(*) as c FROM ${def.tableName}`)
+          .get() as { c: number }
+        counts[entityId] = row.c
+      } catch {
+        counts[entityId] = 0
+      }
+    }
+
+    // Also include engine-managed tables
+    try {
+      const row = this.db.prepare('SELECT COUNT(*) as c FROM scans').get() as { c: number }
+      counts['scan'] = row.c
+    } catch {
+      counts['scan'] = 0
+    }
+
+    return counts
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function hashSchema(schema: ResolvedSchema): string {
+  // Simple hash: concatenate entity IDs + field names + kinds
+  const parts: string[] = []
+  for (const [entityId, def] of Object.entries(schema.entities)) {
+    parts.push(entityId)
+    for (const [fieldId, fieldDef] of Object.entries(def.fields)) {
+      parts.push(`${fieldId}:${fieldDef.kind}`)
+    }
+  }
+  // Use a simple string hash (no crypto needed — this is just for change detection)
+  let hash = 0
+  const str = parts.join('|')
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32bit int
+  }
+  return String(Math.abs(hash))
 }

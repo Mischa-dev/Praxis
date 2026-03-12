@@ -1,10 +1,10 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { loadManifest, loadGlossary } from './profile-loader'
+import { loadManifest, loadGlossary, loadEntitySchemaFromProfile } from './profile-loader'
 import { loadModules, watchModules, stopWatchingModules } from './module-loader'
 import { loadCloudProviders } from './scope-checker'
-import { initDefaultWorkspace, closeDatabase } from './workspace-manager'
+import { initDefaultWorkspace, closeDatabase, setEntitySchema } from './workspace-manager'
 import { initProcessManager, cleanupProcessManager } from './process-manager'
 import { initWorkflowEngine, loadWorkflows, cleanupWorkflowEngine } from './workflow-engine'
 import { initPipelineEngine, cleanupPipelineEngine } from './pipeline-engine'
@@ -55,6 +55,12 @@ app.whenReady().then(() => {
     console.error('Failed to load profile:', err)
     app.quit()
     return
+  }
+
+  // Load entity schema (if defined in profile) and pass to workspace manager
+  const entitySchema = loadEntitySchemaFromProfile()
+  if (entitySchema) {
+    setEntitySchema(entitySchema)
   }
 
   // Load cloud provider ranges for scope checking

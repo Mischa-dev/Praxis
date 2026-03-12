@@ -84,7 +84,13 @@ export type {
   ProductVersionCondition,
   WebPathFoundCondition,
   FindingExistsCondition,
-  TechnologyDetectedCondition
+  TechnologyDetectedCondition,
+  LegacyConditionType,
+  GenericConditionType,
+  EntityExistsCondition,
+  EntityCountCondition,
+  FieldMatchesCondition,
+  EntityFieldRangeCondition
 } from './action'
 
 export type {
@@ -148,7 +154,16 @@ export type {
   IpcEventMap,
   IpcRequest,
   IpcResponse,
-  CredentialWithContext
+  CredentialWithContext,
+  EntitySchemaRequest,
+  EntityCreateRequest,
+  EntityGetRequest,
+  EntityListRequest,
+  EntityUpdateRequest,
+  EntityDeleteRequest,
+  EntityDetailRequest,
+  EntitySearchRequest,
+  EntityActionsRequest
 } from './ipc'
 
 export type {
@@ -160,6 +175,22 @@ export type {
 } from './ui'
 
 export type { GlossaryTerm } from './glossary'
+
+export type {
+  FieldKind,
+  FieldRole,
+  FieldDef,
+  AutoDetectRule,
+  OnConflictConfig,
+  EntityDef,
+  ExtractionPattern,
+  EntitySchema,
+  ResolvedEntityDef,
+  ResolvedSchema,
+  EntityRecord,
+  EntityDetail,
+  EntityFilter
+} from './entity'
 
 export type {
   ThemeId,

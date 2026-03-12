@@ -61,6 +61,7 @@ export interface Finding {
 
 /** Structured output from parsing a scan's results */
 export interface ParsedResults {
+  /** Legacy typed entity slots (kept for backward compatibility during migration) */
   entities: {
     hosts: Target[]
     services: Service[]
@@ -69,6 +70,8 @@ export interface ParsedResults {
     webPaths: WebPath[]
     findings: Finding[]
   }
+  /** Generic entity records keyed by entity type from schema (new) */
+  entityRecords?: Record<string, Record<string, unknown>[]>
   raw: string
   summary: string
 }

@@ -6,7 +6,7 @@ import { CommandPalette } from './components/command-palette'
 import { ToastContainer } from './components/notifications'
 import { useProfileStore } from './stores/profile-store'
 import { useModuleStore } from './stores/module-store'
-import { useTargetStore } from './stores/target-store'
+import { useEntityStore } from './stores/entity-store'
 import { useWorkspaceStore } from './stores/workspace-store'
 import { useTerminalStore } from './stores/terminal-store'
 import { useSettingsStore } from './stores/settings-store'
@@ -63,7 +63,8 @@ class ErrorBoundary extends Component<
 function App(): React.JSX.Element {
   const { loadProfile, loading, error } = useProfileStore()
   const loadModules = useModuleStore((s) => s.loadModules)
-  const loadTargets = useTargetStore((s) => s.loadTargets)
+  const loadEntitySchema = useEntityStore((s) => s.loadSchema)
+  const loadPrimaryEntities = useEntityStore((s) => s.loadEntities)
   const loadCurrentWorkspace = useWorkspaceStore((s) => s.loadCurrentWorkspace)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
@@ -74,7 +75,13 @@ function App(): React.JSX.Element {
     loadCurrentWorkspace()
     loadProfile().then(() => {
       loadModules()
-      loadTargets()
+      // Load entity schema and primary entities
+      loadEntitySchema().then(() => {
+        const schema = useEntityStore.getState().schema
+        if (schema) {
+          loadPrimaryEntities(schema.primaryEntity)
+        }
+      })
 
       // Apply profile-level effect defaults
       const manifest = useProfileStore.getState().manifest
@@ -84,7 +91,7 @@ function App(): React.JSX.Element {
         if (effects.glow === false) document.documentElement.classList.add('no-glow')
       }
     })
-  }, [loadProfile, loadModules, loadTargets, loadSettings, loadCurrentWorkspace])
+  }, [loadProfile, loadModules, loadEntitySchema, loadPrimaryEntities, loadSettings, loadCurrentWorkspace])
 
   // Global listener: update terminal session status + fire notifications on tool:status events
   useEffect(() => {

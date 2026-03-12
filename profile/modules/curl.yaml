@@ -1,0 +1,81 @@
+id: curl
+name: "cURL"
+description: "Transfer data from or to a server using HTTP, HTTPS, FTP, and more"
+category: transfer
+command: curl
+tags: [http, transfer, api, web, download]
+
+arguments:
+  - id: url
+    name: "URL"
+    type: positional
+    position: last
+    required: true
+    help: "URL to request"
+  - id: method
+    name: "Method"
+    flag: "-X"
+    type: select
+    options: [GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS]
+    help: "HTTP request method"
+  - id: headers
+    name: "Headers"
+    flag: "-H"
+    type: text
+    repeatable: true
+    help: "Custom header to include (e.g. 'Content-Type: application/json')"
+  - id: data
+    name: "Data"
+    flag: "-d"
+    type: text
+    help: "Data to send in the request body"
+  - id: output
+    name: "Output File"
+    flag: "-o"
+    type: text
+    help: "Write response body to file instead of stdout"
+  - id: follow_redirects
+    name: "Follow Redirects"
+    flag: "-L"
+    type: flag
+    help: "Follow HTTP 3xx redirects"
+  - id: include_headers
+    name: "Include Headers"
+    flag: "-i"
+    type: flag
+    help: "Include HTTP response headers in the output"
+  - id: verbose
+    name: "Verbose"
+    flag: "-v"
+    type: flag
+    help: "Show detailed connection and request info"
+  - id: silent
+    name: "Silent"
+    flag: "-s"
+    type: flag
+    help: "Suppress progress meter and error messages"
+  - id: timeout
+    name: "Timeout"
+    flag: "--max-time"
+    type: text
+    help: "Maximum time in seconds for the request"
+  - id: user_agent
+    name: "User Agent"
+    flag: "-A"
+    type: text
+    help: "Custom User-Agent header"
+  - id: insecure
+    name: "Insecure"
+    flag: "-k"
+    type: flag
+    help: "Allow insecure TLS connections (skip cert verification)"
+
+output:
+  parser: regex
+  patterns:
+    - name: http_status
+      pattern: "HTTP/[\\d.]+ (\\d{3})"
+      fields: [status_code]
+    - name: content_type
+      pattern: "Content-Type:\\s*(.+)"
+      fields: [content_type]

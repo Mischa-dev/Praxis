@@ -1,0 +1,44 @@
+id: dig
+name: "dig"
+description: "DNS lookup utility — query DNS records for domains and hostnames"
+category: network
+command: dig
+tags: [dns, network, lookup, domain]
+
+arguments:
+  - id: target
+    name: "Domain"
+    type: positional
+    position: 1
+    required: true
+    template: "${host.value}"
+    help: "Domain name or IP to look up"
+  - id: record_type
+    name: "Record Type"
+    type: positional
+    position: 2
+    default: "A"
+    help: "DNS record type to query"
+  - id: server
+    name: "DNS Server"
+    flag: "@"
+    type: text
+    prefix: "@"
+    help: "Specific DNS server to query (e.g. 8.8.8.8)"
+  - id: short
+    name: "Short Output"
+    flag: "+short"
+    type: flag
+    help: "Show only the answer, no headers or extra info"
+  - id: trace
+    name: "Trace"
+    flag: "+trace"
+    type: flag
+    help: "Trace the delegation path from root servers"
+
+output:
+  parser: regex
+  patterns:
+    - name: answer
+      pattern: "^(\\S+)\\s+\\d+\\s+IN\\s+(\\w+)\\s+(.+)$"
+      fields: [name, record_type, value]

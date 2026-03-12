@@ -1,0 +1,51 @@
+id: ping
+name: "Ping"
+description: "Send ICMP echo requests to test network connectivity"
+category: network
+command: ping
+tags: [network, connectivity, icmp, diagnostics]
+
+arguments:
+  - id: target
+    name: "Target"
+    type: positional
+    position: last
+    required: true
+    template: "${host.value}"
+    help: "Hostname or IP address to ping"
+  - id: count
+    name: "Count"
+    flag: "-c"
+    type: text
+    default: "4"
+    help: "Number of echo requests to send (default: unlimited, set to limit)"
+  - id: interval
+    name: "Interval"
+    flag: "-i"
+    type: text
+    help: "Seconds between each request (default: 1)"
+  - id: timeout
+    name: "Timeout"
+    flag: "-W"
+    type: text
+    help: "Time in seconds to wait for a response"
+  - id: packet_size
+    name: "Packet Size"
+    flag: "-s"
+    type: text
+    help: "Size of data payload in bytes (default: 56)"
+
+output:
+  parser: regex
+  patterns:
+    - name: rtt_stats
+      pattern: "rtt min/avg/max/mdev = ([\\d.]+)/([\\d.]+)/([\\d.]+)/([\\d.]+)"
+      fields: [rtt_min, rtt_avg, rtt_max, rtt_mdev]
+    - name: packet_stats
+      pattern: "(\\d+) packets transmitted, (\\d+) received, ([\\d.]+)% packet loss"
+      fields: [transmitted, received, loss_pct]
+
+suggestions:
+  - condition: "always"
+    text: "Host is reachable — try traceroute for path analysis"
+    suggest_tool: traceroute

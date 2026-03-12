@@ -1,0 +1,47 @@
+id: ss
+name: "ss"
+description: "Socket statistics — show listening ports and active connections"
+category: network
+command: ss
+tags: [network, sockets, ports, connections]
+
+arguments:
+  - id: listening
+    name: "Listening"
+    flag: "-l"
+    type: flag
+    default_enabled: true
+    help: "Show only listening sockets"
+  - id: tcp
+    name: "TCP Only"
+    flag: "-t"
+    type: flag
+    help: "Show only TCP sockets"
+  - id: udp
+    name: "UDP Only"
+    flag: "-u"
+    type: flag
+    help: "Show only UDP sockets"
+  - id: numeric
+    name: "Numeric"
+    flag: "-n"
+    type: flag
+    default_enabled: true
+    help: "Don't resolve service names — show port numbers"
+  - id: processes
+    name: "Show Processes"
+    flag: "-p"
+    type: flag
+    help: "Show which process owns each socket"
+  - id: all
+    name: "All Sockets"
+    flag: "-a"
+    type: flag
+    help: "Show both listening and non-listening sockets"
+
+output:
+  parser: regex
+  patterns:
+    - name: socket
+      pattern: "^(\\w+)\\s+\\w+\\s+\\d+\\s+\\d+\\s+(\\S+)\\s+(\\S+)"
+      fields: [protocol, local_address, peer_address]

@@ -1,0 +1,69 @@
+id: grep
+name: "grep"
+description: "Search file contents for lines matching a pattern"
+category: text
+command: grep
+tags: [search, text, pattern, regex]
+
+arguments:
+  - id: pattern
+    name: "Pattern"
+    type: positional
+    position: 1
+    required: true
+    help: "Regular expression or fixed string to search for"
+  - id: path
+    name: "File/Directory"
+    type: positional
+    position: 2
+    required: true
+    help: "File or directory to search in"
+  - id: recursive
+    name: "Recursive"
+    flag: "-r"
+    type: flag
+    help: "Search directories recursively"
+  - id: ignore_case
+    name: "Ignore Case"
+    flag: "-i"
+    type: flag
+    help: "Case-insensitive matching"
+  - id: line_number
+    name: "Line Numbers"
+    flag: "-n"
+    type: flag
+    default_enabled: true
+    help: "Show line numbers in output"
+  - id: count
+    name: "Count Only"
+    flag: "-c"
+    type: flag
+    help: "Print only the count of matching lines per file"
+  - id: files_only
+    name: "Filenames Only"
+    flag: "-l"
+    type: flag
+    help: "Print only the names of files with matches"
+  - id: invert
+    name: "Invert Match"
+    flag: "-v"
+    type: flag
+    help: "Select lines that do NOT match the pattern"
+  - id: context
+    name: "Context Lines"
+    flag: "-C"
+    type: text
+    help: "Show N lines of context around each match"
+  - id: include
+    name: "Include Files"
+    flag: "--include"
+    type: text
+    help: "Only search files matching this glob pattern (e.g. *.py)"
+  - id: exclude_dir
+    name: "Exclude Dir"
+    flag: "--exclude-dir"
+    type: text
+    help: "Skip directories matching this pattern (e.g. node_modules)"
+
+output:
+  parser: lines

@@ -20,7 +20,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useWorkflowStore } from '../../stores/workflow-store'
-import { useTargetStore } from '../../stores/target-store'
+import { useEntityStore, selectPrimaryType, selectActiveEntity } from '../../stores/entity-store'
+import { getDisplayValue } from '../../lib/schema-utils'
 import { useUiStore } from '../../stores/ui-store'
 import { usePipelineStore } from '../../stores/pipeline-store'
 import { Button, Badge, EmptyState } from '../common'
@@ -53,8 +54,9 @@ interface WorkflowViewProps {
 
 export function WorkflowView({ workflowId }: WorkflowViewProps) {
   const navigate = useUiStore((s) => s.navigate)
-  const activeTargetId = useTargetStore((s) => s.activeTargetId)
-  const targets = useTargetStore((s) => s.targets)
+  const activeTargetId = useEntityStore((s) => s.activeEntityId)
+  const activeEntity = useEntityStore(selectActiveEntity)
+  const primaryType = useEntityStore(selectPrimaryType)
   const { executeWorkflow } = useWorkflowStore()
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
@@ -63,7 +65,7 @@ export function WorkflowView({ workflowId }: WorkflowViewProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [executing, setExecuting] = useState(false)
 
-  const activeTarget = targets.find((t) => t.id === activeTargetId)
+  const activeEntityValue = activeEntity && primaryType ? getDisplayValue(activeEntity, primaryType) : null
 
   useEffect(() => {
     setLoading(true)
@@ -350,13 +352,10 @@ export function WorkflowView({ workflowId }: WorkflowViewProps) {
       </div>
 
       {/* Target indicator */}
-      {activeTarget ? (
+      {activeEntityValue ? (
         <div className="flex items-center gap-2 px-3 py-2 rounded bg-bg-base border border-border">
           <span className="text-[11px] text-text-muted">Target:</span>
-          <span className="text-xs text-accent font-mono">{activeTarget.value}</span>
-          {activeTarget.label && (
-            <span className="text-[11px] text-text-muted">({activeTarget.label})</span>
-          )}
+          <span className="text-xs text-accent font-mono">{activeEntityValue}</span>
         </div>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2 rounded bg-warning/10 border border-warning/20">
@@ -418,14 +417,14 @@ export function WorkflowView({ workflowId }: WorkflowViewProps) {
       </div>
 
       {/* Confirm dialog */}
-      {activeTarget && (
+      {activeEntityValue && (
         <WorkflowConfirm
           workflow={workflow}
           open={confirmOpen}
           onClose={() => setConfirmOpen(false)}
           onExecute={handleExecute}
           executing={executing}
-          targetValue={activeTarget.value}
+          targetValue={activeEntityValue}
         />
       )}
     </div>

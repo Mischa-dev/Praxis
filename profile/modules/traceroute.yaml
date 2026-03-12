@@ -1,0 +1,43 @@
+id: traceroute
+name: "Traceroute"
+description: "Trace the network path to a remote host, showing each hop"
+category: network
+command: traceroute
+tags: [network, routing, diagnostics, hops]
+
+arguments:
+  - id: target
+    name: "Target"
+    type: positional
+    position: last
+    required: true
+    template: "${host.value}"
+    help: "Hostname or IP address to trace route to"
+  - id: max_hops
+    name: "Max Hops"
+    flag: "-m"
+    type: text
+    default: "30"
+    help: "Maximum number of hops (default: 30)"
+  - id: wait
+    name: "Wait Time"
+    flag: "-w"
+    type: text
+    help: "Seconds to wait for a response per hop"
+  - id: tcp
+    name: "Use TCP"
+    flag: "-T"
+    type: flag
+    help: "Use TCP SYN instead of UDP (useful when ICMP is blocked)"
+  - id: no_dns
+    name: "No DNS"
+    flag: "-n"
+    type: flag
+    help: "Do not resolve IP addresses to hostnames"
+
+output:
+  parser: regex
+  patterns:
+    - name: hop
+      pattern: "^\\s*(\\d+)\\s+(\\S+)\\s+\\((\\S+)\\)\\s+([\\d.]+)\\s+ms"
+      fields: [hop_number, hostname, ip, rtt_ms]

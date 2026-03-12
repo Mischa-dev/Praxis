@@ -61,6 +61,7 @@ export interface ProfilePaths {
   glossary: string
   actions: string
   scope: string
+  schema?: string
 }
 
 // ── Profile View Configuration ──

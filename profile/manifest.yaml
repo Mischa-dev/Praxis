@@ -1,7 +1,7 @@
 id: praxis-default
 name: "Praxis"
 tagline: "Action through practice."
-description: "Default Praxis profile — replace this with your own"
+description: "Universal CLI workflow orchestration platform"
 version: "0.1.0"
 
 # Branding
@@ -45,23 +45,48 @@ themes:
     button_primary_text: "#0a0a0a"
     description: "Minimal, muted, low-contrast"
 
-# Target types
+# Target types (used for auto-detect in add dialog)
 target_types:
-  - id: ip
-    label: "IP Address"
+  - id: local
+    label: "Local"
+    icon: "monitor"
+    pattern: "^(localhost|127\\.0\\.0\\.1|::1)$"
+  - id: remote
+    label: "Remote"
+    icon: "server"
     pattern: "^\\d{1,3}(\\.\\d{1,3}){3}$"
-  - id: hostname
-    label: "Hostname"
-    pattern: "^[a-zA-Z0-9][a-zA-Z0-9\\-]*$"
-  - id: domain
-    label: "Domain"
-    pattern: "^([a-zA-Z0-9\\-]+\\.)+[a-zA-Z]{2,}$"
-  - id: url
-    label: "URL"
-    pattern: "^https?://"
+  - id: container
+    label: "Container"
+    icon: "box"
+  - id: vm
+    label: "VM"
+    icon: "cpu"
+  - id: cloud
+    label: "Cloud"
+    icon: "cloud"
 
-# Tool categories (empty — add your own)
-categories: []
+# Tool categories
+categories:
+  - id: network
+    label: "Network"
+    icon: "network"
+    description: "Network diagnostics and connectivity"
+  - id: system
+    label: "System"
+    icon: "cpu"
+    description: "System information and monitoring"
+  - id: filesystem
+    label: "Filesystem"
+    icon: "folder"
+    description: "File system exploration and analysis"
+  - id: text
+    label: "Text Processing"
+    icon: "file-text"
+    description: "Text search, filtering, and transformation"
+  - id: transfer
+    label: "Transfer"
+    icon: "download"
+    description: "File transfer and HTTP requests"
 
 # Layout configuration
 layout:
@@ -78,6 +103,21 @@ layout:
     collapsible: true
   status_bar:
     enabled: true
+
+# Scope checking
+scope:
+  enabled: false
+  cloud_providers_dir: "scope/"
+  enforcement_default: "off"
+
+# Paths within the profile
+paths:
+  modules: "modules/"
+  workflows: "workflows/"
+  glossary: "glossary/"
+  actions: "actions/"
+  scope: "scope/"
+  schema: "schema.yaml"
 
 # Effects
 effects:

@@ -1,0 +1,65 @@
+schema_version: 1
+primary_entity: host
+
+entities:
+  host:
+    label: "Host"
+    label_plural: "Hosts"
+    icon: "monitor"
+    fields:
+      value: { kind: text, required: true, unique: true, role: display }
+      type: { kind: enum, values: [local, remote, container, vm, cloud], required: true, role: category }
+      label: { kind: text }
+      status: { kind: enum, values: [online, offline, unknown], default: unknown, role: status }
+      os: { kind: text }
+      ip: { kind: text }
+      tags: { kind: json, default: "[]" }
+      notes: { kind: text }
+    timestamps: [created_at, updated_at]
+    searchable: [value, label, os, ip, notes]
+    auto_detect:
+      - type_value: local
+        pattern: "^(localhost|127\\.0\\.0\\.1|::1)$"
+      - type_value: remote
+        pattern: "^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$"
+      - type_value: remote
+        pattern: "^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z]{2,})+$"
+
+  service:
+    label: "Service"
+    label_plural: "Services"
+    icon: "server"
+    parent: host
+    fields:
+      port: { kind: integer, required: true }
+      protocol: { kind: enum, values: [tcp, udp], default: tcp }
+      state: { kind: enum, values: [open, closed, filtered], default: open, role: status }
+      service_name: { kind: text, role: display }
+      version: { kind: text }
+    timestamps: [created_at]
+    unique_together: [[host_id, port, protocol]]
+    on_conflict:
+      strategy: upsert
+      coalesce_fields: [service_name, version]
+    searchable: [service_name]
+
+  note:
+    label: "Note"
+    label_plural: "Notes"
+    icon: "file-text"
+    parent: host
+    fields:
+      title: { kind: text, role: display }
+      content: { kind: text, required: true }
+    timestamps: [created_at, updated_at]
+    searchable: [title, content]
+
+extraction_patterns:
+  - type: ip
+    pattern: "\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b"
+  - type: url
+    pattern: "https?://[^\\s\"'<>]+"
+  - type: hostname
+    pattern: "\\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}\\b"
+  - type: mac_address
+    pattern: "\\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\\b"

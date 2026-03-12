@@ -10,6 +10,12 @@ import type { Workflow, WorkflowRun as WorkflowRunType, Pipeline, PipelineRun } 
 import type { ProfileManifest } from './profile'
 import type { GlossaryTerm } from './glossary'
 import type { AppSettings } from './settings'
+import type {
+  ResolvedSchema,
+  EntityRecord,
+  EntityDetail as GenericEntityDetail,
+  EntityFilter
+} from './entity'
 
 // ---------- Tool Execution ----------
 
@@ -330,6 +336,52 @@ export interface ReportTemplate {
   description: string
 }
 
+// ---------- Generic Entity System ----------
+
+export interface EntitySchemaRequest {
+  /** No params — returns the full resolved schema */
+}
+
+export interface EntityCreateRequest {
+  entityType: string
+  data: Record<string, unknown>
+}
+
+export interface EntityGetRequest {
+  entityType: string
+  id: number
+}
+
+export interface EntityListRequest {
+  entityType: string
+  filter?: EntityFilter
+}
+
+export interface EntityUpdateRequest {
+  entityType: string
+  id: number
+  updates: Record<string, unknown>
+}
+
+export interface EntityDeleteRequest {
+  entityType: string
+  id: number
+}
+
+export interface EntityDetailRequest {
+  entityType: string
+  id: number
+}
+
+export interface EntitySearchRequest {
+  query: string
+}
+
+export interface EntityActionsRequest {
+  entityType: string
+  id: number
+}
+
 // ---------- Settings ----------
 
 export interface SettingsSetRequest {
@@ -430,6 +482,18 @@ export interface IpcChannelMap {
 
   // Notifications
   'notification:desktop': { request: { title: string; body: string }; response: void }
+
+  // Generic Entity System
+  'entity:schema': { request: EntitySchemaRequest; response: ResolvedSchema }
+  'entity:create': { request: EntityCreateRequest; response: EntityRecord }
+  'entity:get': { request: EntityGetRequest; response: EntityRecord | null }
+  'entity:list': { request: EntityListRequest; response: EntityRecord[] }
+  'entity:update': { request: EntityUpdateRequest; response: EntityRecord | null }
+  'entity:delete': { request: EntityDeleteRequest; response: void }
+  'entity:detail': { request: EntityDetailRequest; response: GenericEntityDetail | null }
+  'entity:search': { request: EntitySearchRequest; response: Record<string, EntityRecord[]> }
+  'entity:stats': { request: Record<string, never>; response: Record<string, number> }
+  'entity:actions': { request: EntityActionsRequest; response: EvaluatedAction[] }
 }
 
 /** Streaming event channels (webContents.send / ipcRenderer.on) */
