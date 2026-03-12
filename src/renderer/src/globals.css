@@ -1,0 +1,267 @@
+/* Font imports — 3-tier typography system
+   Display: Outfit — app name, page titles, hero text
+   Interface: Geist Sans — nav labels, buttons, form labels, descriptions
+   Data/Code: Geist Mono — IPs, ports, commands, terminal, hashes
+*/
+@import "@fontsource/outfit/latin-400.css";
+@import "@fontsource/outfit/latin-500.css";
+@import "@fontsource/outfit/latin-600.css";
+@import "@fontsource/outfit/latin-700.css";
+@import "@fontsource/geist-sans/latin-400.css";
+@import "@fontsource/geist-sans/latin-500.css";
+@import "@fontsource/geist-sans/latin-600.css";
+@import "@fontsource/geist-sans/latin-700.css";
+@import "@fontsource/geist-mono/latin-400.css";
+@import "@fontsource/geist-mono/latin-500.css";
+@import "@fontsource/geist-mono/latin-600.css";
+@import "@fontsource/geist-mono/latin-700.css";
+
+/* Visual effects (scanline, glow, animations) */
+@import "./effects.css";
+
+@import "tailwindcss";
+
+/* ─── Tailwind v4 Theme Tokens ─── */
+@theme {
+  /* Fonts — 3-tier system */
+  --font-display: "Outfit", system-ui, sans-serif;
+  --font-sans: "Geist Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "Fira Code", "Cascadia Code", monospace;
+
+  /* Type scale */
+  --font-size-2xs: 10px;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+
+  /* Base palette — mapped from CSS custom properties */
+  --color-bg-base: var(--bg-base);
+  --color-bg-recessed: var(--bg-recessed);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-overlay: var(--bg-overlay);
+  --color-bg-wash: var(--bg-wash);
+  --color-bg-input: var(--bg-input);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-bright: var(--border-bright);
+  --color-border-focus: var(--border-focus);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  /* Accent colors */
+  --color-accent: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-text: var(--accent-text);
+
+  /* Severity colors */
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-high: var(--severity-high);
+  --color-severity-medium: var(--severity-medium);
+  --color-severity-low: var(--severity-low);
+  --color-severity-info: var(--severity-info);
+
+  /* Status colors */
+  --color-success: var(--success);
+  --color-error: var(--error);
+
+  /* Shadows */
+  --shadow-raised: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.4);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-panel: 200ms ease;
+}
+
+/* ─── CSS Custom Properties ─── */
+:root {
+  /* 6-level surface palette (slight cool-shift) */
+  --bg-base: #09090b;
+  --bg-recessed: #0c0c0f;
+  --bg-surface: #131316;
+  --bg-elevated: #1c1c21;
+  --bg-overlay: #252529;
+  --bg-wash: #2e2e34;
+  --bg-input: #0f0f12;
+
+  /* Text */
+  --text-primary: #d4d4d4;
+  --text-secondary: #737373;
+  --text-muted: #525252;
+
+  /* 4-level border system */
+  --border-subtle: #161618;
+  --border: #1e1e22;
+  --border-bright: #2a2a2f;
+  --border-focus: var(--accent-primary);
+
+  /* Severity colors */
+  --severity-critical: #ff3333;
+  --severity-high: #ff6b35;
+  --severity-medium: #ffb000;
+  --severity-low: #0088ff;
+  --severity-info: #737373;
+
+  /* Semantic colors */
+  --accent-purple: #a855f7;
+  --success: #22c55e;
+  --error: #ef4444;
+
+  /* Theme accent colors — Terminal Green (default) */
+  --accent-primary: #00ff41;
+  --accent-secondary: #ffb000;
+
+  /* Accent tints (pre-computed, overridden per-theme via manifest) */
+  --accent-dim: #0a2612;
+  --accent-subtle: #0b1a10;
+  --accent-text: #3dff6f;
+
+  /* Button text color (dark on accent background) */
+  --button-primary-text: #0a0a0a;
+}
+
+/* ─── Theme Variants ─── */
+/* Switching themes = updating CSS variables. No Tailwind recompile needed. */
+[data-theme="midnight-blue"] {
+  --accent-primary: #0088ff;
+  --accent-secondary: #00d4ff;
+  --accent-dim: #0a1a2e;
+  --accent-subtle: #0b1520;
+  --accent-text: #4da6ff;
+}
+
+[data-theme="blood-red"] {
+  --accent-primary: #ff3333;
+  --accent-secondary: #ff6b35;
+  --accent-dim: #2e0a0a;
+  --accent-subtle: #1a0b0b;
+  --accent-text: #ff6666;
+}
+
+[data-theme="stealth"] {
+  --accent-primary: #737373;
+  --accent-secondary: #a3a3a3;
+  --accent-dim: #1a1a1a;
+  --accent-subtle: #151515;
+  --accent-text: #999999;
+}
+
+/* ─── Base Styles ─── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+}
+
+/* Monospace for code/terminal areas */
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+}
+
+/* Display font for headings */
+h1, h2 {
+  font-family: var(--font-display);
+}
+
+/* ─── Custom Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-bright);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Hide scrollbar until hover */
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hidden:hover {
+  scrollbar-width: thin;
+}
+.scrollbar-hidden:hover::-webkit-scrollbar {
+  display: block;
+}
+
+/* ─── Selection ─── */
+::selection {
+  background: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  color: var(--text-primary);
+}
+
+/* ─── Focus Ring ─── */
+/* Visible on keyboard navigation, hidden on mouse click */
+:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ─── Smooth Transitions ─── */
+/* All interactive elements get smooth transitions per PRD Section 4.1 */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+[role="tab"],
+[role="menuitem"] {
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+}
+
+/* ─── Utility: Drag Region (custom title bar) ─── */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag,
+.no-drag-region {
+  -webkit-app-region: no-drag;
+}

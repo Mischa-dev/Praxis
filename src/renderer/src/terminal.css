@@ -1,0 +1,133 @@
+/* Terminal emulator styles for xterm.js */
+
+/* Container for the terminal component */
+.terminal-pane {
+  position: relative;
+  background: #080808;
+  overflow: hidden;
+}
+
+/* Scanline overlay on terminal pane */
+.terminal-pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    transparent 0px,
+    transparent 1px,
+    rgba(0, 0, 0, 0.04) 1px,
+    rgba(0, 0, 0, 0.04) 2px
+  );
+  z-index: 2;
+}
+
+/* xterm.js container — fill parent */
+.terminal-pane .xterm {
+  height: 100%;
+  padding: 4px 0;
+}
+
+/* Override xterm viewport to use our scrollbar style */
+.terminal-pane .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-bright, #2a2a2a) transparent;
+}
+
+.terminal-pane .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.terminal-pane .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-pane .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--border-bright, #2a2a2a);
+  border-radius: 3px;
+}
+
+.terminal-pane .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted, #555);
+}
+
+/* Search decoration highlights */
+.terminal-pane .xterm-find-result-decoration {
+  background-color: rgba(255, 176, 0, 0.3) !important;
+  outline: 1px solid rgba(255, 176, 0, 0.5);
+}
+
+.terminal-pane .xterm-find-active-result-decoration {
+  background-color: rgba(255, 176, 0, 0.5) !important;
+  outline: 1px solid rgba(255, 176, 0, 0.8);
+}
+
+/* Drag handle for resizing the terminal */
+.terminal-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: ns-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 150ms ease;
+}
+
+.terminal-resize-handle:hover,
+.terminal-resize-handle.active {
+  background: var(--accent-primary, #00ff41);
+}
+
+/* Terminal search bar */
+.terminal-search-bar {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border-bright, #2a2a2a);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.terminal-search-bar input {
+  width: 180px;
+  padding: 2px 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-input, #0f0f0f);
+  border: 1px solid var(--border, #1e1e1e);
+  border-radius: 3px;
+  outline: none;
+}
+
+.terminal-search-bar input:focus {
+  border-color: var(--accent-primary, #00ff41);
+}
+
+.terminal-search-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted, #555);
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.terminal-search-bar button:hover {
+  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-surface, #111);
+}

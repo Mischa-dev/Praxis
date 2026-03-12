@@ -1,0 +1,503 @@
+/* ─── Visual Effects ───
+ * All effects are toggleable via CSS classes.
+ * PRD Section 4.1: scanline overlay, glow, glitch, transitions, micro-interactions.
+ */
+
+/* ─── Scanline Overlay ─── */
+/* Subtle CRT scanline effect for terminal panes. Toggle with .scanlines class. */
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  z-index: 10;
+}
+
+/* Ensure scanline container is positioned */
+.scanlines {
+  position: relative;
+}
+
+/* ─── Accent Glow ─── */
+/* Faint glow on accent-colored elements (box-shadow with accent at 15% opacity) */
+.glow {
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+
+.glow-sm {
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.glow-lg {
+  box-shadow: 0 0 20px 4px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+}
+
+/* Text glow for accent text */
+.text-glow {
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent-primary) 40%, transparent);
+}
+
+/* ─── Glitch Effect ─── */
+/* Subtle glitch animation for the app logo. Toggle with .glitch class. */
+@keyframes glitch {
+  0%,
+  100% {
+    transform: translate(0);
+    opacity: 1;
+  }
+  20% {
+    transform: translate(-1px, 1px);
+  }
+  40% {
+    transform: translate(1px, -1px);
+  }
+  60% {
+    transform: translate(-1px, -1px);
+    opacity: 0.98;
+  }
+  80% {
+    transform: translate(1px, 1px);
+  }
+}
+
+.glitch {
+  animation: glitch 4s ease-in-out infinite;
+}
+
+/* Chromatic aberration variant */
+.glitch-chromatic {
+  position: relative;
+}
+
+.glitch-chromatic::before,
+.glitch-chromatic::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.glitch-chromatic::before {
+  color: var(--severity-critical);
+  animation: glitch-shift-left 3s ease-in-out infinite;
+  clip-path: inset(0 0 60% 0);
+  opacity: 0.04;
+}
+
+.glitch-chromatic::after {
+  color: var(--accent-primary);
+  animation: glitch-shift-right 3s ease-in-out infinite;
+  clip-path: inset(60% 0 0 0);
+  opacity: 0.04;
+}
+
+@keyframes glitch-shift-left {
+  0%,
+  100% {
+    transform: translate(0);
+  }
+  50% {
+    transform: translate(-2px, 0);
+  }
+}
+
+@keyframes glitch-shift-right {
+  0%,
+  100% {
+    transform: translate(0);
+  }
+  50% {
+    transform: translate(2px, 0);
+  }
+}
+
+/* ─── Shimmer / Skeleton Loading ─── */
+/* PRD: "not spinners — shimmer placeholders" */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 25%,
+    var(--bg-elevated) 50%,
+    var(--bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* Skeleton text line */
+.skeleton-text {
+  height: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-text:last-child {
+  width: 60%;
+}
+
+/* Skeleton circle (avatar) */
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+/* ─── Panel Animations ─── */
+/* Panel open/close: 200ms slide + fade */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-out-right {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-out-left {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* View transition crossfade (150ms per PRD) */
+@keyframes view-crossfade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel-enter-right {
+  animation: slide-in-right 200ms ease forwards;
+}
+
+.panel-exit-right {
+  animation: slide-out-right 200ms ease forwards;
+}
+
+.panel-enter-left {
+  animation: slide-in-left 200ms ease forwards;
+}
+
+.panel-exit-left {
+  animation: slide-out-left 200ms ease forwards;
+}
+
+.view-enter {
+  animation: view-crossfade 150ms ease forwards;
+}
+
+.fade-in {
+  animation: fade-in 150ms ease forwards;
+}
+
+.fade-out {
+  animation: fade-out 150ms ease forwards;
+}
+
+/* ─── Micro-interactions ─── */
+/* Button press feedback */
+.press-feedback:active {
+  transform: scale(0.97);
+  transition: transform 50ms ease;
+}
+
+/* Card hover lift */
+.hover-lift {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Badge pulse on new data */
+@keyframes badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.badge-pulse {
+  animation: badge-pulse 600ms ease;
+}
+
+/* ─── Accent Border Highlight ─── */
+/* Animated border glow for focused/active panels */
+.accent-border-glow {
+  border-color: var(--accent-primary);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 20%, transparent),
+    0 0 8px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+/* ─── Status Indicator Pulse ─── */
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-running {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* ─── Toast Notification Slide ─── */
+@keyframes toast-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.toast-enter {
+  animation: toast-in 200ms ease forwards;
+}
+
+.toast-exit {
+  animation: toast-out 200ms ease forwards;
+}
+
+/* ─── Progress Bar Indeterminate ─── */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+/* ─── Settings Toggle Classes ─── */
+/* When .no-animations is on <html>, disable transitions and animations globally */
+.no-animations *,
+.no-animations *::before,
+.no-animations *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+.no-animations .skeleton {
+  animation: none;
+  background: var(--bg-elevated);
+}
+
+/* When .no-scanlines is on <html>, hide the scanline overlay */
+.no-scanlines .scanlines::after,
+.no-scanlines .terminal-pane::after {
+  display: none;
+}
+
+/* When .no-glow is on <html>, remove all glow effects */
+.no-glow .glow,
+.no-glow .glow-sm,
+.no-glow .glow-lg {
+  box-shadow: none !important;
+}
+
+.no-glow .text-glow {
+  text-shadow: none !important;
+}
+
+.no-glow .accent-border-glow {
+  box-shadow: none !important;
+}
+
+/* ─── Panel Resize Handles ─── */
+/* Vertical resize handle (left/right edge of panels) */
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 150ms ease;
+}
+
+/* Grip dots — visible on hover */
+.panel-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  background: transparent;
+  border-radius: 1px;
+  transition: background 150ms ease;
+  /* Dotted pattern via repeating-linear-gradient */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 2px,
+    var(--text-muted, #555) 2px,
+    var(--text-muted, #555) 4px
+  );
+  background-size: 2px 100%;
+  opacity: 0;
+}
+
+.panel-resize-handle:hover::after {
+  opacity: 0.6;
+}
+
+.panel-resize-handle.active::after {
+  opacity: 0;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle.active {
+  background: var(--accent-primary, #00ff41);
+}
+
+.panel-resize-handle-right {
+  right: 0;
+}
+
+.panel-resize-handle-left {
+  left: 0;
+}
+
+/* ─── Panel Collapse Animation ─── */
+/* Two-phase: content fades out (100ms) → width animates (200ms) */
+.panel-collapsible {
+  overflow: hidden;
+}
+
+.panel-collapsible-content {
+  transition: opacity 100ms ease;
+}
+
+.panel-collapsible.collapsed .panel-collapsible-content {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel-collapsible.expanded .panel-collapsible-content {
+  opacity: 1;
+}
+
+/* Width transition waits for content fade (100ms delay) */
+.panel-collapsible {
+  transition: width 200ms ease 100ms;
+}
+
+/* When expanding, content fades in after width opens (200ms delay) */
+.panel-collapsible.expanding .panel-collapsible-content {
+  transition: opacity 100ms ease 200ms;
+}
+
+/* ─── Reduced Motion ─── */
+/* Respect user preferences for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background: var(--bg-elevated);
+  }
+}
