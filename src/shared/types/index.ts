@@ -73,20 +73,6 @@ export type {
   ActionRule,
   ActionRuleFile,
   EvaluatedAction,
-  NoScansCondition,
-  ServiceExistsCondition,
-  PortOpenCondition,
-  PortRangeCondition,
-  OsMatchesCondition,
-  VulnFoundCondition,
-  CredentialFoundCondition,
-  ScanCompletedCondition,
-  ProductVersionCondition,
-  WebPathFoundCondition,
-  FindingExistsCondition,
-  TechnologyDetectedCondition,
-  LegacyConditionType,
-  GenericConditionType,
   EntityExistsCondition,
   EntityCountCondition,
   FieldMatchesCondition,
@@ -110,6 +96,9 @@ export type {
   DelayNodeConfig,
   NoteNodeConfig,
   StartNodeConfig,
+  ShellNodeConfig,
+  PromptNodeConfig,
+  SetVariableNodeConfig,
   PipelineNodeConfigMap,
   PipelineNodeV2,
   PipelineNodeV1,
@@ -163,7 +152,9 @@ export type {
   EntityDeleteRequest,
   EntityDetailRequest,
   EntitySearchRequest,
-  EntityActionsRequest
+  EntityActionsRequest,
+  PipelinePromptEvent,
+  PipelinePromptResponse
 } from './ipc'
 
 export type {

@@ -18,7 +18,7 @@ interface PipelineActions {
   removePipeline: (id: number) => Promise<void>
   setActivePipeline: (pipeline: Pipeline | null) => void
   setDirty: (dirty: boolean) => void
-  executePipelineRun: (pipelineId: number, targetId: number) => Promise<string>
+  executePipelineRun: (pipelineId: number, targetId?: number) => Promise<string>
   cancelRun: (runId: string) => Promise<void>
   clearRun: () => void
 }
@@ -86,7 +86,7 @@ export const usePipelineStore = create<PipelineState & PipelineActions>((set, ge
   setActivePipeline: (pipeline) => set({ activePipeline: pipeline, dirty: false }),
   setDirty: (dirty) => set({ dirty }),
 
-  executePipelineRun: async (pipelineId: number, targetId: number) => {
+  executePipelineRun: async (pipelineId: number, targetId?: number) => {
     // Subscribe to progress events
     if (unsubscribeNodeStatus) {
       unsubscribeNodeStatus()

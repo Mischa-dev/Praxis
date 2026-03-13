@@ -6,8 +6,8 @@
  * lives under `<userData>/workspaces/`.
  */
 
-import { app } from 'electron'
 import { join } from 'path'
+import { getUserDataPath } from './app-paths'
 import {
   mkdirSync,
   readdirSync,
@@ -53,13 +53,16 @@ export function setEntitySchema(schema: ResolvedSchema | null): void {
 
 /** Ensure the workspaces directory exists and return its path */
 function getWorkspacesDir(): string {
-  const dir = join(app.getPath('userData'), 'workspaces')
+  const dir = join(getUserDataPath(), 'workspaces')
   mkdirSync(dir, { recursive: true })
   return dir
 }
 
 /** Get the directory for a specific workspace */
 function getWorkspaceDir(workspaceId: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(workspaceId)) {
+    throw new Error(`Invalid workspace ID format: ${workspaceId}`)
+  }
   return join(getWorkspacesDir(), workspaceId)
 }
 
@@ -279,7 +282,15 @@ export async function exportWorkspace(workspaceId: string): Promise<string> {
   }
 
   // Export to the user's downloads directory
-  const downloadsDir = app.getPath('downloads')
+  let downloadsDir: string
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { app } = require('electron')
+    downloadsDir = app.getPath('downloads')
+  } catch {
+    downloadsDir = join(getUserDataPath(), 'exports')
+    mkdirSync(downloadsDir, { recursive: true })
+  }
   const safeName = meta.name.replace(/[^a-zA-Z0-9_-]/g, '_')
   const exportPath = join(downloadsDir, `${safeName}_${Date.now()}.zip`)
 

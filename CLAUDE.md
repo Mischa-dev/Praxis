@@ -4,12 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Praxis?
 
-Praxis is a **universal CLI workflow orchestration platform** built on Electron.
-It provides a domain-agnostic engine for building guided CLI tool workflow apps.
-All domain knowledge — entity schemas, tool definitions, action rules, workflows,
-and branding — is injected via a swappable **profile** directory.
+Praxis is a **visual CLI workflow automation platform** built on Electron — think
+"n8n for the terminal." Users build node-based pipelines that chain CLI commands
+with control flow (conditionals, loops, prompts, variables), executable from both
+the GUI and a headless CLI.
 
-To build a new app: swap `profile/`, run `pnpm build`, done. No engine code changes.
+All domain knowledge — entity schemas, tool definitions, action rules, workflows,
+and branding — is injected via a swappable **profile** directory. To build a new
+app: swap `profile/`, run `pnpm build`, done. No engine code changes.
 
 Extracted from [Aeth0n](https://github.com/Mischa-dev/Aeth0n) (pentesting command
 center). Praxis = engine, Aeth0n = pentesting profile.
@@ -19,7 +21,8 @@ center). Praxis = engine, Aeth0n = pentesting profile.
 ```bash
 pnpm install          # Install deps (first time or after package changes)
 pnpm build            # Compile everything (main + preload + renderer)
-./praxis.sh           # Launch the app (runs out/main/index.js via electron)
+pnpm build:cli        # Bundle CLI separately (esbuild → out/cli-bundle.js)
+./praxis.sh           # Launch the GUI app (runs out/main/index.js via electron)
 pnpm dev              # Development mode with hot reload
 
 pnpm typecheck        # Run both TypeScript checks (node + web)
@@ -34,6 +37,25 @@ compiled output from `out/`. If you don't rebuild, stale code runs.
 
 **No test framework is configured.** There are no tests in this repo.
 
+### CLI
+
+```bash
+node out/cli-bundle.js list                              # List saved pipelines
+node out/cli-bundle.js run "pipeline-name"               # Execute a pipeline
+node out/cli-bundle.js run "pipeline-name" --dry-run     # Show plan without executing
+node out/cli-bundle.js run "pipeline-name" --var key=val # Pre-set variables
+node out/cli-bundle.js --data-dir ~/.config/praxis list  # Use specific data dir
+```
+
+The CLI is bundled with **esbuild** (not tsc) because TypeScript path aliases
+(`@shared/*`, `@main/*`) aren't resolved by Node.js at runtime. The bundle
+externalizes `better-sqlite3` (native addon) and `electron`.
+
+**Native module ABI mismatch**: `better-sqlite3` must be compiled for the right
+Node.js version. After `pnpm install`, it's built for Electron. To test the CLI
+with system Node.js, run `pnpm rebuild better-sqlite3`. To restore for Electron:
+`npx @electron/rebuild -v $(node -e "console.log(require('electron/package.json').version)") -w better-sqlite3`.
+
 ## Critical Rule: Engine vs Profile
 
 - **Engine** (`src/`): Generic CLI orchestration. `grep -r "nmap\|hydra\|pentest" src/`
@@ -46,96 +68,101 @@ This separation is non-negotiable.
 
 ## Architecture
 
-### Profile-Defined Data Model (Entity System)
+### Dual Execution Modes
 
-The profile controls the entire data model via `profile/schema.yaml`:
+Praxis runs in two modes sharing the same engine code:
 
-```yaml
-schema_version: 1
-primary_entity: host          # The root entity type
+1. **GUI mode** (Electron) — visual pipeline builder, interactive forms, terminal
+2. **CLI mode** (headless Node.js) — `src/cli/index.ts` entry point, readline prompts
 
-entities:
-  host:
-    label: "Host"
-    label_plural: "Hosts"
-    icon: "monitor"
-    fields:
-      value: { kind: text, required: true, unique: true, role: display }
-      type:  { kind: enum, values: [local, remote], role: category }
-      status: { kind: enum, values: [online, offline], role: status }
-    # ...
-  service:
-    parent: host              # Creates host_id FK with CASCADE
-    # ...
-```
+The abstraction boundary is:
+- `src/main/app-paths.ts` — `getUserDataPath()` tries Electron's `app.getPath()`,
+  falls back to `~/.praxis`. CLI calls `setUserDataPath()` to override.
+- `src/main/profile-loader.ts` — `setProfileRoot()` for CLI; lazy `require('electron')`
+  in `getProfileRoot()` so it doesn't crash without Electron.
+- `src/main/pipeline-engine.ts` — `PromptResolver` type injected at init. GUI uses
+  IPC-based resolver (sends event → waits for response). CLI injects readline-based
+  `cliPromptResolver`. Pipeline engine doesn't know which mode it's in.
 
-**Field kinds**: `text`, `integer`, `real`, `boolean`, `enum`, `json`
-**Field roles**: `display` (card title), `status` (badge), `category` (grouping/icon)
-**Relationships**: `parent` (FK with CASCADE), `references` (FK to other entities)
+### Entity System (Optional)
 
-The engine reads this schema and provides:
-- **Schema-driven database** — tables created dynamically from YAML, no hardcoded SQL
-- **Generic CRUD** — `entity:create`, `entity:list`, `entity:update`, `entity:delete`
-- **Generic UI** — `EntityBoard`, `EntityDetail`, `EntityCard`, `SchemaForm` render any entity
-- **Generic IPC** — single `entity-handlers.ts` serves all entity types
+The entity system (profile-defined data model via `profile/schema.yaml`) is entirely
+optional. Pipelines can execute without any target entity — `targetId` is optional
+throughout the pipeline and workflow engines. When no entity schema is loaded, the
+sidebar hides the entity nav item, and the Start node shows "Pipeline Start" instead
+of a target selector.
 
-### Process Model (3 Electron layers)
+### Process Model (3 Electron layers + CLI)
 
 ```
 src/main/           → Electron main process (Node.js)
   index.ts            App entry: loads profile, inits DB, registers IPC, creates window
+  app-paths.ts        Electron/CLI path abstraction (getUserDataPath, setUserDataPath)
   ipc/                IPC handlers (entity, tool, scan, workflow, pipeline, etc.)
-  schema-loader.ts    Loads + validates profile/schema.yaml → ResolvedSchema
-  schema-ddl.ts       Generates CREATE TABLE SQL from schema
-  database.ts         SQLite CRUD (generic entity methods + engine tables)
-  profile-loader.ts   Loads manifest.yaml + glossary
-  module-loader.ts    Loads YAML tool definitions (hot-reloads on file change)
-  process-manager.ts  Spawns CLI tools, manages queue, streams output
-  action-engine.ts    Evaluates action rules against entity state
+  pipeline-engine.ts  Executes visual pipeline graphs (shell, prompt, set-variable, tool nodes)
+  template-resolver.ts  Template expressions, pipe functions, compound conditions
   workflow-engine.ts  Executes multi-step automated workflows
-  pipeline-engine.ts  Executes visual pipeline graphs
-  output-parser.ts    Parses tool output (regex, JSON, XML)
-  report-engine.ts    Schema-driven report generation
+  process-manager.ts  Spawns CLI tools, manages queue, streams output
+  profile-loader.ts   Loads manifest.yaml + glossary (setProfileRoot for CLI)
+  module-loader.ts    Loads YAML tool definitions (hot-reloads on file change)
 
 src/preload/         → Bridge (whitelists IPC channels, exposes window.api)
-  index.ts            Exposes invoke() for request-response, on() for streaming
 
 src/renderer/src/    → React frontend
-  App.tsx             Root: loads profile + entity schema on mount
-  lib/view-registry.ts  Auto-discovers views via import.meta.glob
-  lib/schema-utils.ts   Field role accessors (getDisplayValue, getStatusValue, etc.)
-  lib/icon-map.ts       String → Lucide icon component mapping
-  stores/entity-store.ts  Single Zustand store for all entity types
-  stores/              Other stores (ui, profile, module, scan, terminal, etc.)
-  components/entities/ Generic entity UI (EntityBoard, EntityCard, EntityTabs, etc.)
-  components/views/    View components (auto-discovered for routing)
-  components/layout/   3-column layout: Sidebar | MainContent | ContextPanel
-  components/context/  Context panel sections (entity summary, stats, actions)
+  components/pipeline/  Pipeline builder + node components (ShellNode, PromptNode, etc.)
+
+src/cli/             → Headless CLI entry point
+  index.ts             Arg parsing, profile/workspace init, pipeline execution with polling
+  cli-prompt-resolver.ts  readline-based prompt handler (confirm/text/select)
+  cli-output.ts        ANSI-colored status output
 ```
 
-### Main Process Startup Sequence
+### Pipeline Node Types
 
-1. Load manifest + glossary from profile
-2. Load entity schema (optional — app can run without schema)
-3. Load cloud provider ranges for scope checking
-4. Initialize default workspace database (creates tables from schema DDL)
-5. Load module definitions (async, non-blocking)
-6. Watch `profile/modules/` for YAML hot-reload
-7. Initialize process manager, workflow engine, pipeline engine
-8. Register all IPC handlers
-9. Create frameless BrowserWindow (1400x900, min 1024x700)
+| Type | Config Interface | Executor | Description |
+|------|-----------------|----------|-------------|
+| `start` | `StartNodeConfig` | Sets target context (optional) | Entry point |
+| `tool` | `ToolNodeConfig` | Runs a module via process-manager | CLI tool execution |
+| `shell` | `ShellNodeConfig` | `child_process.exec()` directly | Arbitrary shell command |
+| `prompt` | `PromptNodeConfig` | IPC dialog (GUI) or readline (CLI) | User input |
+| `set-variable` | `SetVariableNodeConfig` | Resolves template, stores in vars | Variable assignment |
+| `condition` | `ConditionNodeConfig` | `evaluateCondition()` → routes branches | Boolean branching |
+| `for-each` | `ForEachNodeConfig` | Iterates array, executes body nodes | Loop |
+| `delay` | `DelayNodeConfig` | `setTimeout` | Pause |
+| `note` | `NoteNodeConfig` | No-op | Canvas annotation |
+
+Shell and tool nodes support **output capture**: `captureOutput: { variable, mode, pattern }`.
+Modes: `full`, `last_line`, `regex` (first capture group), `json` (with optional path).
+
+### Template Expression Language
+
+Used in pipeline configs, workflow steps, and action rules. Syntax: `${expression}`.
+
+**Namespaces**: `target.*` (entity fields), `steps.<id>.*` / `nodes.<id>.*` (prior
+results, `.output` for raw stdout, `.results.*` for parsed), `vars.*` (pipeline
+variables), `item` / `item.*` (for-each iteration).
+
+**Pipe functions** (chained with `|`):
+- Array: `join('sep')`, `where('field','val')`, `count`, `first`, `pluck('field')`, `unique`
+- String: `trim`, `upper`, `lower`, `split('delim')`, `replace('old','new')`
+- Predicates: `startsWith('p')`, `endsWith('s')`, `contains('s')`, `matches('regex')`, `exists`
+- Type: `toNumber`, `toString`, `toBool`, `length`
+- Fallback: `default('value')`
+- Comparison: `== 'str'`, `!= 'str'`, `> N`, `>= N`, `< N`, `<= N`, `== N`, `!= N`
+
+**Compound conditions**: `&&`, `||`, `!` negation, `(...)` grouping. Operator
+precedence: `!` > `||` > `&&`.
 
 ### IPC Channels & Preload Whitelist
 
 The preload layer explicitly allowlists every IPC channel in two arrays:
-- **INVOKE_CHANNELS** (~45 channels): request-response (entity CRUD, tool execution,
-  workflow/pipeline ops, workspace, settings, reports, window controls)
-- **EVENT_CHANNELS** (4 channels): streaming events (`tool:output`, `tool:status`,
-  `workflow:step-status`, `pipeline:node-status`)
+- **INVOKE_CHANNELS** (~46 channels): request-response (entity CRUD, tool execution,
+  workflow/pipeline ops, workspace, settings, reports, window controls,
+  `pipeline:prompt-response`)
+- **EVENT_CHANNELS** (5 channels): streaming events (`tool:output`, `tool:status`,
+  `workflow:step-status`, `pipeline:node-status`, `pipeline:prompt`)
 
 **Adding a new IPC channel requires updating the whitelist in `src/preload/index.ts`.**
-The renderer can only call channels listed in these arrays. The preload exposes
-`window.api.invoke()` for request-response and `window.api.on()` for event listeners.
 
 ### View System
 
@@ -181,6 +208,7 @@ Module YAML files are hot-reloaded during development — editing a YAML in
 ### Database
 
 - One SQLite database per workspace (in `~/.praxis/workspaces/{id}/`)
+- Electron app uses `~/.config/praxis/` by default; CLI defaults to `~/.praxis/`
 - Uses `better-sqlite3` (synchronous), WAL mode, foreign keys enforced
 - DB files are `chmod 0600` — may contain sensitive data
 - **Entity tables**: created dynamically from `profile/schema.yaml` by `schema-ddl.ts`
@@ -203,31 +231,14 @@ manifest) use this system. Returns `{ valid: boolean; errors: ValidationError[] 
 
 ### Build Configuration
 
-- **electron-vite** with 3 configs (main/preload/renderer)
+- **electron-vite** with 3 configs (main/preload/renderer) — handles Electron app
+- **esbuild** for CLI bundle — resolves path aliases, externalizes native addons
 - `marked` is explicitly inlined (excluded from externalizeDepsPlugin) for main process
 - Renderer uses `@vitejs/plugin-react` + `@tailwindcss/vite` (Tailwind v4)
 - TypeScript: composite project with `tsconfig.node.json` (main+preload) and
   `tsconfig.web.json` (renderer), `jsx: "react-jsx"` (no React import needed)
-
-## Creating a New App (Profile)
-
-To build a new domain-specific app, create a profile with:
-
-```
-profile/
-  manifest.yaml     → App name, themes, categories, layout, effects
-  schema.yaml       → Entity data model (types, fields, relationships)
-  modules/          → YAML tool definitions (one per CLI tool)
-  actions/          → Contextual action rules (when X, suggest Y)
-  workflows/        → Multi-step automated flows
-  glossary/         → Educational tooltips for domain concepts
-  scope/            → (optional) Scope checking data
-  src/              → (optional) Custom React views, stores, components
-```
-
-The engine gives you for free: schema-driven database, entity CRUD, generic UI,
-tool execution with terminal, pipeline builder, workflow engine, action engine,
-template resolution, settings, history, notifications, reports.
+- `tsconfig.cli.json` exists for type-checking CLI code but is NOT used for the
+  actual build (esbuild is used instead)
 
 ## Conventions
 
@@ -240,9 +251,19 @@ template resolution, settings, history, notifications, reports.
 `@main` → `src/main/`, `@renderer` → `src/renderer/src/`, `@shared` → `src/shared/`,
 `@profile` → `profile/`, `@profile-src` → `profile/src/`
 
+**These aliases only work in electron-vite builds.** The CLI uses esbuild which
+resolves them at bundle time. Never use path aliases in `src/cli/` — use relative
+imports to `../main/` and `../shared/`.
+
 ### Template Variables
 Always `${variable}` — never bare `{variable}`. Available in workflows, actions,
-and module suggestions (e.g., `${host.value}`, `${service.port}`).
+pipeline configs, and module suggestions (e.g., `${vars.greeting}`, `${target.value}`).
+
+### Electron Abstraction Pattern
+Main-process modules that need `app` from Electron must use lazy `require('electron')`
+in a try/catch (not top-level `import`), so CLI mode works. See `profile-loader.ts`
+and `app-paths.ts` for the pattern. `import type { ... } from 'electron'` is fine
+(stripped at compile time).
 
 ### Theme Switching
 Themes in `manifest.yaml` define accent colors. Switching = updating CSS custom
@@ -259,6 +280,10 @@ properties (`--accent-primary`, `--accent-secondary`). No Tailwind recompile.
   render, causes infinite re-render. Use `(s) => s.caches[type]?.entities ?? STABLE_REF`
 - Adding IPC channels without updating the preload whitelist in `src/preload/index.ts`
 - Forgetting to add new view types to `ViewId` union in `src/shared/types/ui.ts`
+- Top-level `import { app } from 'electron'` in main-process modules — breaks CLI
+  mode. Use lazy `require('electron')` in a try/catch instead.
+- Using `tsc` to build the CLI — path aliases won't resolve at runtime. Use
+  `pnpm build:cli` (esbuild) instead.
 
 ## Authorship
 

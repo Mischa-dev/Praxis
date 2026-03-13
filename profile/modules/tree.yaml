@@ -2,7 +2,7 @@ id: tree
 name: "tree"
 description: "Display directory structure as an indented tree"
 category: filesystem
-command: tree
+binary: tree
 tags: [filesystem, directories, visualization]
 
 arguments:
@@ -44,4 +44,4 @@ arguments:
     help: "Include hidden files (dotfiles)"
 
 output:
-  parser: lines
+  type: lines

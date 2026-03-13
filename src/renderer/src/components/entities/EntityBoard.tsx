@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ResolvedEntityDef, EntityRecord } from '@shared/types/entity'
 import { useEntityStore } from '../../stores/entity-store'
-import type { EntityRecord } from '@shared/types/entity'
 import { EntityCard } from './EntityCard'
 import { AddEntityDialog } from './AddEntityDialog'
 import { getStatusFieldDef } from '../../lib/schema-utils'

@@ -15,7 +15,7 @@ import {
 } from './validate'
 
 const EXECUTION_MODES = ['spawn', 'reference', 'interactive']
-const OUTPUT_TYPES = ['raw', 'xml', 'json', 'jsonl', 'csv', 'regex', 'greppable', 'custom']
+const OUTPUT_TYPES = ['raw', 'xml', 'json', 'jsonl', 'csv', 'regex', 'lines', 'greppable', 'custom']
 const ARGUMENT_TYPES = [
   'text',
   'number',
@@ -31,19 +31,13 @@ const ARGUMENT_TYPES = [
   'textarea',
   'port',
   'ip',
-  'range'
+  'range',
+  'positional',
+  'flag'
 ]
 const FLAG_SEPARATORS = ['space', 'equals', 'none']
-const ENTITY_TYPES = [
-  'host',
-  'service',
-  'vulnerability',
-  'credential',
-  'web_path',
-  'finding',
-  'os',
-  'dns_record'
-]
+// Entity types are profile-defined — validation only checks that the field is a string.
+// The actual type names come from profile/schema.yaml and are validated at schema load time.
 
 function validateArgument(
   arg: unknown,
@@ -128,7 +122,7 @@ function validateOutput(
   }
   const o = output as Record<string, unknown>
 
-  requireEnum(o, 'type', OUTPUT_TYPES, path, errors)
+  optionalEnum(o, 'type', OUTPUT_TYPES, path, errors)
   optionalString(o, 'parser', path, errors)
   optionalString(o, 'encoding', path, errors)
   optionalString(o, 'file_output', path, errors)
@@ -143,7 +137,7 @@ function validateOutput(
         continue
       }
       const e = entity as Record<string, unknown>
-      requireEnum(e, 'type', ENTITY_TYPES, ePath, errors)
+      requireString(e, 'type', ePath, errors)
       requireString(e, 'extract', ePath, errors)
     }
   }
@@ -160,8 +154,11 @@ function validateOutput(
       const p = pat as Record<string, unknown>
       requireString(p, 'name', pPath, errors)
       requireString(p, 'pattern', pPath, errors)
-      requireString(p, 'entity_type', pPath, errors)
-      requireObject(p, 'fields', pPath, errors)
+      optionalString(p, 'entity_type', pPath, errors)
+      // fields can be an array of names or an object mapping
+      if (p.fields !== undefined && !Array.isArray(p.fields) && (typeof p.fields !== 'object' || p.fields === null)) {
+        errors.push({ path: `${pPath}.fields`, message: 'fields must be an array or object' })
+      }
       optionalString(p, 'flags', pPath, errors)
     }
   }
@@ -253,8 +250,10 @@ export function validateModule(data: unknown): ValidationResult {
       }
       const s = sug as Record<string, unknown>
       requireString(s, 'condition', sPath, errors)
-      requireString(s, 'suggest', sPath, errors)
-      requireString(s, 'message', sPath, errors)
+      optionalString(s, 'suggest', sPath, errors)
+      optionalString(s, 'suggest_tool', sPath, errors)
+      optionalString(s, 'message', sPath, errors)
+      optionalString(s, 'text', sPath, errors)
       optionalNumber(s, 'priority', sPath, errors)
     }
   }

@@ -2,7 +2,7 @@ id: curl
 name: "cURL"
 description: "Transfer data from or to a server using HTTP, HTTPS, FTP, and more"
 category: transfer
-command: curl
+binary: curl
 tags: [http, transfer, api, web, download]
 
 arguments:
@@ -71,7 +71,7 @@ arguments:
     help: "Allow insecure TLS connections (skip cert verification)"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: http_status
       pattern: "HTTP/[\\d.]+ (\\d{3})"

@@ -3,7 +3,7 @@
  * variables, executes steps in dependency order, and reports progress via IPC.
  *
  * This module is domain-agnostic: it executes whatever steps and tools
- * the workflow YAML defines. No tool names or pentest concepts here.
+ * the workflow YAML defines. All domain knowledge lives in the profile.
  */
 
 import { readFileSync, readdirSync, statSync } from 'fs'
@@ -12,7 +12,7 @@ import * as yaml from 'js-yaml'
 import { randomUUID } from 'crypto'
 import type { BrowserWindow } from 'electron'
 import { validateWorkflow } from '@shared/schemas/workflow-schema'
-import { getResolvedPaths } from './profile-loader'
+import { getResolvedPaths, getEntitySchema } from './profile-loader'
 import { getModule } from './module-loader'
 import { getDatabase } from './workspace-manager'
 import { execute, cancel as cancelProcess, isRunning } from './process-manager'
@@ -33,7 +33,7 @@ import type {
   WorkflowStepStatus,
   StepFailureAction
 } from '@shared/types/pipeline'
-import type { Target } from '@shared/types/target'
+import type { EntityRecord } from '@shared/types/entity'
 
 // ---------------------------------------------------------------------------
 // State
@@ -47,7 +47,7 @@ const activeRuns = new Map<string, ActiveWorkflowRun>()
 
 interface ActiveWorkflowRun {
   run: WorkflowRun
-  target: Target
+  target: EntityRecord
   /** Per-step accumulated results from parsing */
   stepResults: Map<string, StepResultData>
   /** Per-step extracted variables (from `extract:` config) */
@@ -166,7 +166,7 @@ export function reloadWorkflows(): Workflow[] {
 
 export async function executeWorkflow(
   workflowId: string,
-  targetId: number,
+  targetId?: number,
   options?: {
     disabledSteps?: string[]
     argOverrides?: Record<string, Record<string, unknown>>
@@ -176,8 +176,16 @@ export async function executeWorkflow(
   if (!workflow) throw new Error(`Workflow not found: ${workflowId}`)
 
   const db = getDatabase()
-  const target = db.getTarget(targetId)
-  if (!target) throw new Error(`Target not found: ${targetId}`)
+
+  // Target is optional
+  let target: EntityRecord = { id: 0 } as EntityRecord
+  if (targetId) {
+    const schema = getEntitySchema()
+    const primaryType = schema?.primaryEntity ?? 'host'
+    const found = db.entityGet(primaryType, targetId)
+    if (!found) throw new Error(`Entity not found: ${primaryType}#${targetId}`)
+    target = found
+  }
 
   const runId = randomUUID()
 

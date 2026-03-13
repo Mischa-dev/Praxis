@@ -14,20 +14,6 @@ import {
 
 const RISK_LEVELS = ['passive', 'active', 'intrusive']
 const CONDITION_TYPES = [
-  // Legacy (still supported as aliases)
-  'no_scans',
-  'service_exists',
-  'port_open',
-  'port_range',
-  'os_matches',
-  'vuln_found',
-  'credential_found',
-  'scan_completed',
-  'product_version',
-  'web_path_found',
-  'finding_exists',
-  'technology_detected',
-  // Generic
   'entity_exists',
   'entity_count',
   'field_matches',
@@ -49,48 +35,6 @@ function validateCondition(
 
   const type = c.type as string
   switch (type) {
-    case 'service_exists':
-      requireString(c, 'service_name', path, errors)
-      break
-    case 'port_open':
-      if (typeof c.port !== 'number') {
-        errors.push({ path: `${path}.port`, message: 'port_open requires a numeric port' })
-      }
-      break
-    case 'port_range':
-      if (typeof c.min !== 'number') {
-        errors.push({ path: `${path}.min`, message: 'port_range requires numeric min' })
-      }
-      if (typeof c.max !== 'number') {
-        errors.push({ path: `${path}.max`, message: 'port_range requires numeric max' })
-      }
-      break
-    case 'os_matches':
-      requireString(c, 'pattern', path, errors)
-      break
-    case 'vuln_found':
-      optionalString(c, 'severity', path, errors)
-      optionalString(c, 'cve', path, errors)
-      break
-    case 'scan_completed':
-      requireString(c, 'tool', path, errors)
-      optionalBoolean(c, 'negate', path, errors)
-      break
-    case 'product_version':
-      requireString(c, 'product', path, errors)
-      requireString(c, 'version', path, errors)
-      break
-    case 'web_path_found':
-      optionalNumber(c, 'status_code', path, errors)
-      optionalString(c, 'path_pattern', path, errors)
-      break
-    case 'finding_exists':
-      requireString(c, 'finding_type', path, errors)
-      break
-    case 'technology_detected':
-      requireString(c, 'technology', path, errors)
-      break
-    // Generic condition types
     case 'entity_exists':
       requireString(c, 'entity', path, errors)
       break

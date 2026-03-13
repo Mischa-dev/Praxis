@@ -2,7 +2,7 @@ id: df
 name: "df"
 description: "Report file system disk space usage"
 category: system
-command: df
+binary: df
 tags: [disk, storage, filesystem, system]
 
 arguments:
@@ -34,7 +34,7 @@ arguments:
     help: "Show only the filesystem containing this path"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: filesystem
       pattern: "^(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)"

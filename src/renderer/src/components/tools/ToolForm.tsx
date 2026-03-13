@@ -39,7 +39,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
       }
       // Pre-populate target fields from active target
       if (arg.type === 'target' && activeEntity) {
-        defaults[arg.id] = activeTargetValue
+        defaults[arg.id] = activeEntityValue
       }
     }
     // Apply autoArgs from action rules (overrides defaults)
@@ -186,7 +186,7 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
         defaults[arg.id] = arg.default
       }
       if (arg.type === 'target' && activeEntity) {
-        defaults[arg.id] = activeTargetValue
+        defaults[arg.id] = activeEntityValue
       }
     }
     if (autoArgs) {
@@ -263,7 +263,6 @@ export function ToolForm({ moduleId, autoArgs }: ToolFormProps): React.JSX.Eleme
               formValues={formValues}
               errors={errors}
               onChange={handleFieldChange}
-              activeEntityValue={activeTargetValue}
               collapsed={groupIdx > 0}
             />
           ))}
@@ -326,7 +325,6 @@ interface FieldGroupProps {
   formValues: Record<string, unknown>
   errors: Record<string, string>
   onChange: (argId: string, value: unknown) => void
-  activeEntityValue?: string
   collapsed?: boolean
 }
 
@@ -336,7 +334,6 @@ function FieldGroup({
   formValues,
   errors,
   onChange,
-  activeEntityValue,
   collapsed: initialCollapsed
 }: FieldGroupProps) {
   const [collapsed, setCollapsed] = useState(initialCollapsed ?? false)
@@ -376,7 +373,6 @@ function FieldGroup({
               value={formValues[arg.id]}
               onChange={onChange}
               error={errors[arg.id]}
-              activeEntityValue={activeEntityValue}
             />
           ))}
         </div>

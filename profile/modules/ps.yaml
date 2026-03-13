@@ -2,7 +2,7 @@ id: ps
 name: "ps"
 description: "Report a snapshot of current running processes"
 category: system
-command: ps
+binary: ps
 tags: [processes, system, monitoring]
 
 arguments:
@@ -25,7 +25,7 @@ arguments:
     help: "Sort processes by field"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: process
       pattern: "^(\\S+)\\s+(\\d+)\\s+([\\d.]+)\\s+([\\d.]+)\\s+(\\d+)\\s+(\\d+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(\\S+)\\s+(.+)$"

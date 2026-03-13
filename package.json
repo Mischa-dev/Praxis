@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Universal CLI workflow orchestration platform",
   "main": "./out/main/index.js",
+  "bin": {
+    "praxis": "./out/cli-bundle.js"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -11,7 +14,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "build:cli": "esbuild src/cli/index.ts --bundle --platform=node --target=node18 --outfile=out/cli-bundle.js --external:better-sqlite3 --external:electron --format=cjs --tsconfig=tsconfig.cli.json"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.2.7",
@@ -47,6 +51,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.1",
     "electron-vite": "^5.0.0",
+    "esbuild": "^0.27.4",
     "eslint": "^9.15.0",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.1.0",

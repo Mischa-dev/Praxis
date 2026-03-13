@@ -150,7 +150,7 @@ export interface ScanResultsRequest {
 
 export interface WorkflowExecuteRequest {
   workflowId: string
-  targetId: number
+  targetId?: number
   options?: {
     disabledSteps?: string[]
     argOverrides?: Record<string, Record<string, unknown>>
@@ -184,11 +184,28 @@ export interface PipelineRemoveRequest {
 
 export type PipelineListRequest = Record<string, never>
 
+// ---------- Pipeline Prompt ----------
+
+export interface PipelinePromptEvent {
+  runId: string
+  nodeId: string
+  message: string
+  type: 'confirm' | 'text' | 'select'
+  options?: string[]
+  default?: string
+}
+
+export interface PipelinePromptResponse {
+  runId: string
+  nodeId: string
+  value: string | boolean
+}
+
 // ---------- Pipeline Execution ----------
 
 export interface PipelineExecuteRequest {
   pipelineId: number
-  targetId: number
+  targetId?: number
 }
 
 export interface PipelineExecuteResponse {
@@ -451,6 +468,7 @@ export interface IpcChannelMap {
   'pipeline:execute': { request: PipelineExecuteRequest; response: PipelineExecuteResponse }
   'pipeline:cancel-run': { request: PipelineCancelRunRequest; response: void }
   'pipeline:run-status': { request: PipelineRunStatusRequest; response: PipelineRun | null }
+  'pipeline:prompt-response': { request: PipelinePromptResponse; response: void }
 
   // Credentials
   'credential:list-all': { request: CredentialListAllRequest; response: CredentialWithContext[] }
@@ -502,6 +520,7 @@ export interface IpcEventMap {
   'tool:status': ToolStatusEvent
   'workflow:step-status': WorkflowRunType
   'pipeline:node-status': PipelineRun
+  'pipeline:prompt': PipelinePromptEvent
 }
 
 // Helper type to extract request/response types from the channel map

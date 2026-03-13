@@ -8,6 +8,9 @@ import {
   Repeat,
   Timer,
   StickyNote,
+  Terminal,
+  MessageCircle,
+  Braces,
   type LucideIcon,
 } from 'lucide-react'
 import { SearchInput } from '../common'
@@ -24,6 +27,9 @@ interface LogicNodeDef {
 
 const LOGIC_NODES: LogicNodeDef[] = [
   { type: 'start', label: 'Start', icon: PlayCircle, color: 'text-accent-primary' },
+  { type: 'shell', label: 'Shell Command', icon: Terminal, color: 'text-emerald-400' },
+  { type: 'prompt', label: 'User Prompt', icon: MessageCircle, color: 'text-violet-400' },
+  { type: 'set-variable', label: 'Set Variable', icon: Braces, color: 'text-cyan-400' },
   { type: 'condition', label: 'Condition', icon: GitBranch, color: 'text-amber-400' },
   { type: 'for-each', label: 'For Each', icon: Repeat, color: 'text-blue-400' },
   { type: 'delay', label: 'Delay', icon: Timer, color: 'text-text-muted' },

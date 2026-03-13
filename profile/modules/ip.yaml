@@ -2,7 +2,7 @@ id: ip
 name: "ip"
 description: "Show and manage network interfaces, addresses, and routes"
 category: network
-command: ip
+binary: ip
 tags: [network, interface, routing, ip]
 
 arguments:
@@ -31,4 +31,4 @@ arguments:
     help: "Print brief output"
 
 output:
-  parser: lines
+  type: lines

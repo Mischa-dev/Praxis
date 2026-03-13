@@ -2,7 +2,7 @@ id: find
 name: "find"
 description: "Search for files and directories matching specific criteria"
 category: filesystem
-command: find
+binary: find
 tags: [files, search, filesystem, directories]
 
 arguments:
@@ -56,4 +56,4 @@ arguments:
     help: "Match files with specific permissions (e.g. 755, /u+x)"
 
 output:
-  parser: lines
+  type: lines

@@ -2,7 +2,7 @@ id: du
 name: "du"
 description: "Estimate file and directory space usage"
 category: filesystem
-command: du
+binary: du
 tags: [disk, storage, filesystem, usage]
 
 arguments:
@@ -35,7 +35,7 @@ arguments:
     help: "Directory or file to analyze"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: entry
       pattern: "^([\\d.]+[KMGT]?)\\s+(.+)$"

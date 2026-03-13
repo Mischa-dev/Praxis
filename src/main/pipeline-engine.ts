@@ -3,10 +3,12 @@
  * traversing the node graph in topological order.
  *
  * Domain-agnostic: delegates tool execution to the process manager and
- * module loader. No tool names or pentest concepts here.
+ * module loader. All domain knowledge lives in the profile.
  */
 
 import { randomUUID } from 'crypto'
+import { exec as execCb } from 'child_process'
+import { promisify } from 'util'
 import type { BrowserWindow } from 'electron'
 import { getModule } from './module-loader'
 import { getDatabase } from './workspace-manager'
@@ -16,11 +18,12 @@ import { getScanParsedResults } from './scan-result-store'
 import {
   resolveTemplate,
   evaluateCondition,
+  captureOutputValue,
   type StepResultData
 } from './template-resolver'
-import type { Target } from '@shared/types/target'
+import type { EntityRecord } from '@shared/types/entity'
+import { getEntitySchema } from './profile-loader'
 import type {
-  Pipeline,
   PipelineDefinition,
   PipelineNodeV2,
   PipelineNodeV1,
@@ -34,21 +37,42 @@ import type {
   ConditionNodeConfig,
   ForEachNodeConfig,
   DelayNodeConfig,
-  StepFailureAction,
-  DataMappingEntry
+  ShellNodeConfig,
+  PromptNodeConfig,
+  SetVariableNodeConfig,
+  StepFailureAction
 } from '@shared/types/pipeline'
+
+const execAsync = promisify(execCb)
+
+// ---------------------------------------------------------------------------
+// Prompt resolver type
+// ---------------------------------------------------------------------------
+
+export type PromptResolver = (
+  config: PromptNodeConfig,
+  runId: string,
+  nodeId: string
+) => Promise<string | boolean>
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 let windowGetter: (() => BrowserWindow | null) | null = null
+let promptResolver: PromptResolver | null = null
 
 const activeRuns = new Map<string, ActivePipelineRun>()
 
+/** Completed runs kept briefly so CLI polling can still read them */
+const completedRuns = new Map<string, PipelineRun>()
+
+/** Pending prompt resolvers keyed by `${runId}:${nodeId}` */
+const pendingPrompts = new Map<string, (value: string | boolean) => void>()
+
 interface ActivePipelineRun {
   run: PipelineRun
-  target: Target
+  target: EntityRecord | null
   /** Parsed node graph */
   nodeMap: Map<string, PipelineNodeV2>
   edges: PipelineEdge[]
@@ -60,6 +84,8 @@ interface ActivePipelineRun {
   nodeResults: Map<string, StepResultData>
   /** Per-node extracted variables */
   nodeExtracted: Map<string, Record<string, unknown>>
+  /** Pipeline-level variables (vars.*) */
+  variables: Map<string, unknown>
   /** Scan IDs owned by this pipeline run, for cancellation */
   scanIds: Set<number>
   /** Abort signal */
@@ -70,8 +96,26 @@ interface ActivePipelineRun {
 // Initialization
 // ---------------------------------------------------------------------------
 
-export function initPipelineEngine(getWindow: () => BrowserWindow | null): void {
+export function initPipelineEngine(
+  getWindow: () => BrowserWindow | null,
+  resolver?: PromptResolver
+): void {
   windowGetter = getWindow
+  if (resolver) promptResolver = resolver
+}
+
+export function setPromptResolver(resolver: PromptResolver): void {
+  promptResolver = resolver
+}
+
+/** Resolve a pending prompt from the renderer */
+export function resolvePrompt(runId: string, nodeId: string, value: string | boolean): void {
+  const key = `${runId}:${nodeId}`
+  const resolve = pendingPrompts.get(key)
+  if (resolve) {
+    resolve(value)
+    pendingPrompts.delete(key)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -80,14 +124,19 @@ export function initPipelineEngine(getWindow: () => BrowserWindow | null): void 
 
 export async function executePipeline(
   pipelineId: number,
-  targetId: number
+  targetId?: number
 ): Promise<{ runId: string }> {
   const db = getDatabase()
   const pipeline = db.getPipeline(pipelineId)
   if (!pipeline) throw new Error(`Pipeline not found: ${pipelineId}`)
 
-  const target = db.getTarget(targetId)
-  if (!target) throw new Error(`Target not found: ${targetId}`)
+  // Target is optional — look it up only if provided
+  let target: EntityRecord | null = null
+  if (targetId) {
+    const schema = getEntitySchema()
+    const primaryType = schema?.primaryEntity ?? 'host'
+    target = db.entityGet(primaryType, targetId) ?? null
+  }
 
   // Parse the pipeline definition
   const def: PipelineDefinition = JSON.parse(pipeline.definition)
@@ -165,6 +214,7 @@ export async function executePipeline(
     inDegree: new Map(inDegree),
     nodeResults: new Map(),
     nodeExtracted: new Map(),
+    variables: new Map(),
     scanIds: new Set(),
     aborted: false
   }
@@ -242,9 +292,18 @@ async function runPipelineNodes(activeRun: ActivePipelineRun): Promise<void> {
     run.status = anyFailed ? 'failed' : 'completed'
   }
 
+  // Snapshot variables into run for debug visibility
+  run.variables = Object.fromEntries(activeRun.variables)
+
   run.completedAt = new Date().toISOString()
   sendProgress(run)
+
+  // Cache completed run so CLI polling can still read it after activeRuns cleanup
+  completedRuns.set(run.runId, { ...run })
   activeRuns.delete(run.runId)
+
+  // Auto-expire from cache after 30 seconds
+  setTimeout(() => completedRuns.delete(run.runId), 30_000)
 }
 
 // ---------------------------------------------------------------------------
@@ -253,16 +312,17 @@ async function runPipelineNodes(activeRun: ActivePipelineRun): Promise<void> {
 
 async function executeNode(
   activeRun: ActivePipelineRun,
-  nodeId: string
+  nodeId: string,
+  item?: unknown
 ): Promise<void> {
   if (activeRun.aborted) return
 
   const node = activeRun.nodeMap.get(nodeId)
   if (!node) return
 
-  // Check if this node was already skipped (e.g., by conditional branch)
+  // Check if this node was already handled (e.g., by ForEach loop or conditional branch)
   const nodeRun = activeRun.run.nodes.find((n) => n.nodeId === nodeId)
-  if (nodeRun && nodeRun.status === 'skipped') return
+  if (nodeRun && nodeRun.status !== 'pending') return
 
   switch (node.type) {
     case 'start':
@@ -276,13 +336,22 @@ async function executeNode(
       await executeDelayNode(activeRun, nodeId, node.config as DelayNodeConfig)
       break
     case 'tool':
-      await executeToolNode(activeRun, nodeId, node.config as ToolNodeConfig)
+      await executeToolNode(activeRun, nodeId, node.config as ToolNodeConfig, item)
       break
     case 'condition':
       await executeConditionNode(activeRun, nodeId, node.config as ConditionNodeConfig)
       break
     case 'for-each':
       await executeForEachNode(activeRun, nodeId, node.config as ForEachNodeConfig)
+      break
+    case 'shell':
+      await executeShellNode(activeRun, nodeId, node.config as ShellNodeConfig)
+      break
+    case 'prompt':
+      await executePromptNode(activeRun, nodeId, node.config as PromptNodeConfig)
+      break
+    case 'set-variable':
+      await executeSetVariableNode(activeRun, nodeId, node.config as SetVariableNodeConfig)
       break
   }
 }
@@ -323,9 +392,14 @@ async function executeDelayNode(
 async function executeToolNode(
   activeRun: ActivePipelineRun,
   nodeId: string,
-  config: ToolNodeConfig
+  config: ToolNodeConfig,
+  item?: unknown
 ): Promise<void> {
-  const { target, nodeResults, nodeExtracted } = activeRun
+  const { target, nodeResults, nodeExtracted, variables } = activeRun
+
+  // Reset node status to pending so it can re-run in ForEach iterations
+  const nodeRun = activeRun.run.nodes.find((n) => n.nodeId === nodeId)
+  if (nodeRun) nodeRun.status = 'pending'
 
   updateNodeStatus(activeRun, nodeId, 'running')
 
@@ -348,7 +422,9 @@ async function executeToolNode(
             `\${${mapping.sourceExpression}}`,
             target,
             nodeResults,
-            nodeExtracted
+            nodeExtracted,
+            item,
+            variables
           )
           resolvedArgs[mapping.targetArg] = val
         }
@@ -360,7 +436,9 @@ async function executeToolNode(
             `\${${sourceExpr}}`,
             target,
             nodeResults,
-            nodeExtracted
+            nodeExtracted,
+            item,
+            variables
           )
           resolvedArgs[targetArg] = val
         }
@@ -370,7 +448,7 @@ async function executeToolNode(
     // Apply static args (override mapped values)
     for (const [key, val] of Object.entries(config.args)) {
       if (typeof val === 'string' && val.includes('${')) {
-        resolvedArgs[key] = resolveTemplate(val, target, nodeResults, nodeExtracted)
+        resolvedArgs[key] = resolveTemplate(val, target, nodeResults, nodeExtracted, item, variables)
       } else {
         resolvedArgs[key] = val
       }
@@ -380,12 +458,12 @@ async function executeToolNode(
     const cliArgs = buildCommandArgs(mod, resolvedArgs)
     const command = [mod.binary, ...cliArgs].join(' ')
 
-    // Create scan record
+    // Create scan record — target_id is 0 when no target
     const db = getDatabase()
     const scan = db.addScan({
       tool_id: config.toolId,
       command,
-      target_id: target.id,
+      target_id: target?.id ?? 0,
       args: JSON.stringify(resolvedArgs),
       status: 'queued'
     })
@@ -394,7 +472,7 @@ async function executeToolNode(
       scan_id: scan.id,
       command,
       tool_id: config.toolId,
-      target_id: target.id
+      target_id: target?.id ?? 0
     })
 
     // Update node run with scan ID
@@ -456,6 +534,24 @@ async function executeToolNode(
       parsedResults: parsed
     })
 
+    // Capture output if configured
+    if (config.captureOutput) {
+      const scanData = db.getScan(scan.id)
+      if (scanData?.raw_output_path) {
+        try {
+          const { readFileSync } = await import('fs')
+          const rawOutput = readFileSync(scanData.raw_output_path, 'utf-8')
+          const captured = captureOutputValue(rawOutput, config.captureOutput.mode, config.captureOutput.pattern)
+          variables.set(config.captureOutput.variable, captured)
+          // Also store output in step data
+          const stepData = nodeResults.get(nodeId)
+          if (stepData) stepData.output = rawOutput
+        } catch {
+          // Ignore output read errors
+        }
+      }
+    }
+
     updateNodeStatus(activeRun, nodeId, 'completed')
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
@@ -470,7 +566,7 @@ async function executeToolNode(
 
     if (onFailure === 'retry') {
       try {
-        await executeToolNode(activeRun, nodeId, { ...config, onFailure: 'skip' })
+        await executeToolNode(activeRun, nodeId, { ...config, onFailure: 'skip' }, item)
         return
       } catch {
         // Retry failed, fall through
@@ -494,12 +590,12 @@ async function executeConditionNode(
   nodeId: string,
   config: ConditionNodeConfig
 ): Promise<void> {
-  const { target, nodeResults, nodeExtracted, edges } = activeRun
+  const { target, nodeResults, nodeExtracted, edges, variables } = activeRun
 
   updateNodeStatus(activeRun, nodeId, 'running')
 
   try {
-    const result = evaluateCondition(config.expression, target, nodeResults, nodeExtracted)
+    const result = evaluateCondition(config.expression, target, nodeResults, nodeExtracted, variables)
 
     // Determine which branch to take
     const rejectedHandle = result ? 'false' : 'true'
@@ -524,7 +620,7 @@ async function executeForEachNode(
   nodeId: string,
   config: ForEachNodeConfig
 ): Promise<void> {
-  const { target, nodeResults, nodeExtracted } = activeRun
+  const { target, nodeResults, nodeExtracted, variables } = activeRun
 
   updateNodeStatus(activeRun, nodeId, 'running')
 
@@ -533,30 +629,40 @@ async function executeForEachNode(
       `\${${config.expression}}`,
       target,
       nodeResults,
-      nodeExtracted
+      nodeExtracted,
+      undefined,
+      variables
     )
 
     if (!Array.isArray(items) || items.length === 0) {
+      // No items — skip body nodes since they won't be executed
+      const loopBodyEdges = activeRun.edges.filter((e) => e.source === nodeId)
+      for (const edge of loopBodyEdges) {
+        skipNodeAndExclusiveDependents(activeRun, edge.target, nodeId)
+      }
       updateNodeStatus(activeRun, nodeId, 'completed')
       return
     }
 
-    // Find the loop body — downstream tool nodes directly connected
+    // Find the loop body — downstream nodes directly connected
     const loopBodyEdges = activeRun.edges.filter((e) => e.source === nodeId)
     const loopBodyNodeIds = loopBodyEdges.map((e) => e.target)
 
-    // Execute tool nodes for each item
-    const executeItem = async (item: unknown): Promise<void> => {
+    // Execute body nodes for each item, passing the current item for template resolution
+    const executeItem = async (currentItem: unknown): Promise<void> => {
       const itemVar = config.itemVariable || 'item'
-      // Store the current item in extracted vars under the for-each node's ID
-      const extractedForItem = { ...(nodeExtracted.get(nodeId) ?? {}), [itemVar]: item }
+      // Also store the item in extracted vars so it can be referenced via ${nodes.forEachId.itemVar}
+      const extractedForItem = { ...(nodeExtracted.get(nodeId) ?? {}), [itemVar]: currentItem }
       nodeExtracted.set(nodeId, extractedForItem)
 
       for (const bodyNodeId of loopBodyNodeIds) {
         if (activeRun.aborted) break
         const bodyNode = activeRun.nodeMap.get(bodyNodeId)
-        if (bodyNode?.type === 'tool') {
-          await executeToolNode(activeRun, bodyNodeId, bodyNode.config as ToolNodeConfig)
+        if (!bodyNode) continue
+        if (bodyNode.type === 'tool') {
+          await executeToolNode(activeRun, bodyNodeId, bodyNode.config as ToolNodeConfig, currentItem)
+        } else {
+          await executeNode(activeRun, bodyNodeId, currentItem)
         }
       }
     }
@@ -564,11 +670,217 @@ async function executeForEachNode(
     if (config.parallel) {
       await Promise.all(items.map(executeItem))
     } else {
-      for (const item of items) {
+      for (const currentItem of items) {
         if (activeRun.aborted) break
-        await executeItem(item)
+        await executeItem(currentItem)
       }
     }
+
+    updateNodeStatus(activeRun, nodeId, 'completed')
+  } catch (err) {
+    updateNodeStatus(activeRun, nodeId, 'failed', (err as Error).message)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// New node type executors
+// ---------------------------------------------------------------------------
+
+async function executeShellNode(
+  activeRun: ActivePipelineRun,
+  nodeId: string,
+  config: ShellNodeConfig
+): Promise<void> {
+  const { target, nodeResults, nodeExtracted, variables } = activeRun
+
+  updateNodeStatus(activeRun, nodeId, 'running')
+
+  try {
+    // Resolve templates in the command string
+    const command = String(
+      resolveTemplate(config.command, target, nodeResults, nodeExtracted, undefined, variables)
+    )
+
+    const cwd = config.cwd
+      ? String(resolveTemplate(config.cwd, target, nodeResults, nodeExtracted, undefined, variables))
+      : undefined
+
+    const timeoutMs = (config.timeout ?? 0) * 1000 || undefined
+
+    // Log to command_history
+    try {
+      const db = getDatabase()
+      db.addCommandHistory({
+        scan_id: 0,
+        command,
+        tool_id: 'shell',
+        target_id: target?.id ?? 0
+      })
+    } catch {
+      // Non-fatal
+    }
+
+    // Execute the shell command
+    const { stdout, stderr } = await execAsync(command, {
+      cwd,
+      timeout: timeoutMs,
+      shell: '/bin/sh',
+      maxBuffer: 10 * 1024 * 1024 // 10MB
+    })
+
+    const output = stdout || ''
+
+    // Store output in results
+    nodeResults.set(nodeId, {
+      scanId: 0,
+      status: 'completed',
+      parsedResults: null,
+      output
+    })
+
+    // Capture output if configured
+    if (config.captureOutput) {
+      const captured = captureOutputValue(output, config.captureOutput.mode, config.captureOutput.pattern)
+      variables.set(config.captureOutput.variable, captured)
+    }
+
+    if (stderr) {
+      // stderr is not an error by itself, but log it
+      console.warn(`Shell node ${nodeId} stderr:`, stderr.slice(0, 500))
+    }
+
+    updateNodeStatus(activeRun, nodeId, 'completed')
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    nodeResults.set(nodeId, { scanId: 0, status: 'failed', parsedResults: null })
+
+    const onFailure: StepFailureAction = config.onFailure ?? 'skip'
+
+    if (onFailure === 'abort') {
+      updateNodeStatus(activeRun, nodeId, 'failed', errorMsg)
+      activeRun.aborted = true
+      return
+    }
+
+    updateNodeStatus(activeRun, nodeId, 'failed', errorMsg)
+    if (onFailure === 'skip') {
+      skipExclusiveDependents(activeRun, nodeId)
+    }
+  }
+}
+
+async function executePromptNode(
+  activeRun: ActivePipelineRun,
+  nodeId: string,
+  config: PromptNodeConfig
+): Promise<void> {
+  const { target, nodeResults, nodeExtracted, variables, run } = activeRun
+
+  updateNodeStatus(activeRun, nodeId, 'running')
+
+  try {
+    // Resolve templates in the message
+    const message = String(
+      resolveTemplate(config.message, target, nodeResults, nodeExtracted, undefined, variables)
+    )
+
+    const resolvedConfig: PromptNodeConfig = { ...config, message }
+
+    let response: string | boolean
+
+    if (promptResolver) {
+      // Use injected resolver (for CLI mode or custom resolvers)
+      response = await promptResolver(resolvedConfig, run.runId, nodeId)
+    } else {
+      // Default: send IPC event and wait for response from renderer
+      const win = windowGetter?.()
+      if (!win || win.isDestroyed()) {
+        throw new Error('No window available for prompt')
+      }
+
+      win.webContents.send('pipeline:prompt', {
+        runId: run.runId,
+        nodeId,
+        message: resolvedConfig.message,
+        type: resolvedConfig.type,
+        options: resolvedConfig.options,
+        default: resolvedConfig.default
+      })
+
+      // Wait for response
+      response = await new Promise<string | boolean>((resolve, reject) => {
+        const key = `${run.runId}:${nodeId}`
+        pendingPrompts.set(key, resolve)
+
+        // Timeout handling
+        if (config.timeout && config.timeout > 0) {
+          setTimeout(() => {
+            if (pendingPrompts.has(key)) {
+              pendingPrompts.delete(key)
+              if (config.default !== undefined) {
+                resolve(config.type === 'confirm' ? config.default === 'true' : config.default)
+              } else {
+                reject(new Error('Prompt timed out'))
+              }
+            }
+          }, config.timeout * 1000)
+        }
+
+        // Abort handling
+        const abortCheck = setInterval(() => {
+          if (activeRun.aborted) {
+            clearInterval(abortCheck)
+            pendingPrompts.delete(key)
+            reject(new Error('Pipeline cancelled'))
+          }
+        }, 500)
+
+        // Clean up interval when resolved
+        const originalResolve = pendingPrompts.get(key)!
+        pendingPrompts.set(key, (val) => {
+          clearInterval(abortCheck)
+          originalResolve(val)
+        })
+      })
+    }
+
+    // Store response in variables
+    variables.set(config.variable, response)
+
+    nodeResults.set(nodeId, {
+      scanId: 0,
+      status: 'completed',
+      parsedResults: null,
+      output: String(response)
+    })
+
+    updateNodeStatus(activeRun, nodeId, 'completed')
+  } catch (err) {
+    updateNodeStatus(activeRun, nodeId, 'failed', (err as Error).message)
+  }
+}
+
+async function executeSetVariableNode(
+  activeRun: ActivePipelineRun,
+  nodeId: string,
+  config: SetVariableNodeConfig
+): Promise<void> {
+  const { target, nodeResults, nodeExtracted, variables } = activeRun
+
+  updateNodeStatus(activeRun, nodeId, 'running')
+
+  try {
+    // Resolve templates in the value expression
+    const value = resolveTemplate(config.value, target, nodeResults, nodeExtracted, undefined, variables)
+
+    variables.set(config.variable, value)
+
+    nodeResults.set(nodeId, {
+      scanId: 0,
+      status: 'completed',
+      parsedResults: null,
+      output: String(value)
+    })
 
     updateNodeStatus(activeRun, nodeId, 'completed')
   } catch (err) {
@@ -676,7 +988,9 @@ export function cancelPipeline(runId: string): void {
 
 export function getPipelineRunStatus(runId: string): PipelineRun | null {
   const activeRun = activeRuns.get(runId)
-  return activeRun?.run ?? null
+  if (activeRun) return activeRun.run
+  // Check completed runs cache (for CLI polling that may miss fast-completing runs)
+  return completedRuns.get(runId) ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -742,5 +1056,8 @@ export function cleanupPipelineEngine(): void {
   for (const [runId] of activeRuns) {
     cancelPipeline(runId)
   }
+  completedRuns.clear()
   windowGetter = null
+  promptResolver = null
+  pendingPrompts.clear()
 }

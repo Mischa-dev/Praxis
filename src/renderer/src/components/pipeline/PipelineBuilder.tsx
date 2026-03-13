@@ -36,10 +36,14 @@ import { ConditionNode } from './ConditionNode'
 import { ForEachNode } from './ForEachNode'
 import { DelayNode } from './DelayNode'
 import { NoteNode } from './NoteNode'
+import { ShellNode } from './ShellNode'
+import { PromptNode } from './PromptNode'
+import { SetVariableNode } from './SetVariableNode'
 import { ToolPalette } from './ToolPalette'
 import { SaveDialog } from './SaveDialog'
 import { LoadDialog } from './LoadDialog'
 import { EdgeConfigDialog } from './EdgeConfigDialog'
+import { PromptDialog } from './PromptDialog'
 import {
   ToolConfigDialog,
   ConditionConfigDialog,
@@ -47,6 +51,9 @@ import {
   DelayConfigDialog,
   StartConfigDialog,
   NoteConfigDialog,
+  ShellConfigDialog,
+  PromptConfigDialog,
+  SetVariableConfigDialog,
 } from './NodeConfigDialog'
 import type {
   ToolNodeData,
@@ -55,22 +62,28 @@ import type {
   DelayNodeData,
   NoteNodeData,
   StartNodeData,
+  ShellNodeData,
+  PromptNodeData,
+  SetVariableNodeData,
   AnyNodeData,
 } from './types'
 import { useModuleStore } from '../../stores/module-store'
 import { usePipelineStore } from '../../stores/pipeline-store'
-import { useEntityStore } from '../../stores/entity-store'
 import { useUiStore } from '../../stores/ui-store'
 import type { Module } from '@shared/types'
+import type { PipelinePromptEvent } from '@shared/types/ipc'
 import type {
   PipelineDefinition,
   PipelineNodeV2,
   PipelineNodeV1,
-  PipelineNode as PipelineNodeType,
   Pipeline,
   PipelineNodeType as NodeType,
   PipelineRun,
   DataMappingEntry,
+  StepFailureAction,
+  ShellNodeConfig,
+  PromptNodeConfig,
+  SetVariableNodeConfig,
 } from '@shared/types/pipeline'
 
 // ---------------------------------------------------------------------------
@@ -84,6 +97,9 @@ const nodeTypes = {
   'for-each': ForEachNode,
   delay: DelayNode,
   note: NoteNode,
+  shell: ShellNode,
+  prompt: PromptNode,
+  'set-variable': SetVariableNode,
 }
 
 let nodeIdCounter = 0
@@ -164,8 +180,8 @@ function ExecutionPanel({
               <span className="text-text-secondary font-mono flex-1 truncate">{nr.nodeId}</span>
               <Badge variant={
                 nr.status === 'completed' ? 'success' :
-                nr.status === 'failed' ? 'danger' :
-                nr.status === 'running' ? 'info' :
+                nr.status === 'failed' ? 'error' :
+                nr.status === 'running' ? 'accent' :
                 'default'
               }>
                 {nr.status}
@@ -190,7 +206,6 @@ function ExecutionPanel({
 function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
   const modules = useModuleStore((s) => s.modules)
   const navigate = useUiStore((s) => s.navigate)
-  const activeTargetId = useEntityStore((s) => s.activeEntityId)
   const {
     savePipeline,
     updatePipeline,
@@ -213,6 +228,7 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
   const [showSave, setShowSave] = useState(false)
   const [showLoad, setShowLoad] = useState(false)
   const [execPanelExpanded, setExecPanelExpanded] = useState(false)
+  const [activePrompt, setActivePrompt] = useState<PipelinePromptEvent | null>(null)
   const loaded = useRef(false)
 
   const isRunning = activeRun?.status === 'running'
@@ -286,6 +302,14 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
       )
     }
   }, [activeRun, setNodes])
+
+  // Listen for pipeline prompt events
+  useEffect(() => {
+    const unsub = window.api.on('pipeline:prompt', (data: unknown) => {
+      setActivePrompt(data as PipelinePromptEvent)
+    })
+    return () => unsub()
+  }, [])
 
   // ---------------------------------------------------------------------------
   // Edge connection handling
@@ -419,11 +443,20 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
         case 'note':
           data = { content: '', color: 'default', configured: true } satisfies NoteNodeData
           break
+        case 'shell':
+          data = { command: '', configured: false } satisfies ShellNodeData
+          break
+        case 'prompt':
+          data = { message: '', promptType: 'text', variable: '', configured: false } satisfies PromptNodeData
+          break
+        case 'set-variable':
+          data = { variable: '', value: '', configured: false } satisfies SetVariableNodeData
+          break
         default:
           return
       }
 
-      const newNode: Node = { id, type, position: { x, y }, data }
+      const newNode: Node = { id, type, position: { x, y }, data: data as unknown as Record<string, unknown> }
       setNodes((nds) => [...nds, newNode])
       setDirty(true)
     },
@@ -609,9 +642,9 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
       pipeId = activePipeline.id
     }
 
-    await executePipelineRun(pipeId, activeTargetId!)
+    await executePipelineRun(pipeId)
     setExecPanelExpanded(true)
-  }, [activePipeline, activeTargetId, getDefinition, savePipeline, updatePipeline, executePipelineRun])
+  }, [activePipeline, getDefinition, savePipeline, updatePipeline, executePipelineRun])
 
   const handleStop = useCallback(() => {
     if (activeRun) {
@@ -620,7 +653,7 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
   }, [activeRun, cancelRun])
 
   // Can we run?
-  const canExecute = hasStartNode && activeTargetId && nodes.length > 1 && !isRunning
+  const canExecute = hasStartNode && nodes.length > 1 && !isRunning
 
   // ---------------------------------------------------------------------------
   // Change handlers (with dirty tracking)
@@ -705,6 +738,30 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
             onSave={handleGenericConfigSave}
           />
         )
+      case 'shell':
+        return (
+          <ShellConfigDialog
+            node={configNode}
+            onClose={() => setConfigNode(null)}
+            onSave={handleGenericConfigSave}
+          />
+        )
+      case 'prompt':
+        return (
+          <PromptConfigDialog
+            node={configNode}
+            onClose={() => setConfigNode(null)}
+            onSave={handleGenericConfigSave}
+          />
+        )
+      case 'set-variable':
+        return (
+          <SetVariableConfigDialog
+            node={configNode}
+            onClose={() => setConfigNode(null)}
+            onSave={handleGenericConfigSave}
+          />
+        )
       default:
         return null
     }
@@ -764,6 +821,9 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
                 case 'for-each': return '#60a5fa'
                 case 'delay': return '#6b7280'
                 case 'note': return '#eab308'
+                case 'shell': return '#10b981'
+                case 'prompt': return '#8b5cf6'
+                case 'set-variable': return '#06b6d4'
                 default: return 'var(--accent-primary)'
               }
             }}
@@ -796,7 +856,6 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
               disabled={!canExecute}
               title={
                 !hasStartNode ? 'Add a Start node first' :
-                !activeTargetId ? 'Select a target first' :
                 nodes.length <= 1 ? 'Add more nodes' :
                 isRunning ? 'Pipeline is running' :
                 'Run pipeline'
@@ -894,6 +953,12 @@ function PipelineFlow({ pipelineId }: { pipelineId?: number }) {
           onSave={handleEdgeMappingSave}
         />
       )}
+      {activePrompt && (
+        <PromptDialog
+          prompt={activePrompt}
+          onClose={() => setActivePrompt(null)}
+        />
+      )}
     </div>
   )
 }
@@ -961,6 +1026,50 @@ function serializeNode(n: Node): PipelineNodeV2 {
         position: n.position,
       }
     }
+    case 'shell': {
+      const d = data as ShellNodeData
+      return {
+        id: n.id,
+        type: 'shell',
+        config: {
+          command: d.command,
+          cwd: d.cwd,
+          timeout: d.timeout,
+          onFailure: d.onFailure,
+          captureOutput: d.captureVariable ? {
+            variable: d.captureVariable,
+            mode: d.captureMode ?? 'full',
+            pattern: d.capturePattern,
+          } : undefined,
+        },
+        position: n.position,
+      }
+    }
+    case 'prompt': {
+      const d = data as PromptNodeData
+      return {
+        id: n.id,
+        type: 'prompt',
+        config: {
+          message: d.message,
+          type: d.promptType,
+          options: d.options,
+          default: d.default,
+          variable: d.variable,
+          timeout: d.timeout,
+        },
+        position: n.position,
+      }
+    }
+    case 'set-variable': {
+      const d = data as SetVariableNodeData
+      return {
+        id: n.id,
+        type: 'set-variable',
+        config: { variable: d.variable, value: d.value },
+        position: n.position,
+      }
+    }
     default:
       return {
         id: n.id,
@@ -1001,7 +1110,7 @@ function deserializeNodes(def: PipelineDefinition, modules: Module[]): Node[] {
 function v2NodeToReactFlow(v2: PipelineNodeV2, modules: Module[]): Node {
   switch (v2.type) {
     case 'tool': {
-      const cfg = v2.config as { toolId: string; args: Record<string, unknown>; onFailure?: string; timeout?: number }
+      const cfg = v2.config as { toolId: string; args: Record<string, unknown>; onFailure?: StepFailureAction; timeout?: number }
       const mod = modules.find((m) => m.id === cfg.toolId)
       return {
         id: v2.id,
@@ -1072,7 +1181,7 @@ function v2NodeToReactFlow(v2: PipelineNodeV2, modules: Module[]): Node {
       }
     }
     case 'start': {
-      const cfg = v2.config as { targetSource: string; targetId?: number; label?: string }
+      const cfg = v2.config as { targetSource?: string; targetId?: number; label?: string }
       return {
         id: v2.id,
         type: 'start',
@@ -1083,6 +1192,54 @@ function v2NodeToReactFlow(v2: PipelineNodeV2, modules: Module[]): Node {
           label: cfg.label,
           configured: true,
         } satisfies StartNodeData,
+      }
+    }
+    case 'shell': {
+      const cfg = v2.config as ShellNodeConfig
+      return {
+        id: v2.id,
+        type: 'shell',
+        position: v2.position,
+        data: {
+          command: cfg.command,
+          cwd: cfg.cwd,
+          timeout: cfg.timeout,
+          onFailure: cfg.onFailure,
+          captureVariable: cfg.captureOutput?.variable,
+          captureMode: cfg.captureOutput?.mode,
+          capturePattern: cfg.captureOutput?.pattern,
+          configured: !!cfg.command,
+        } satisfies ShellNodeData,
+      }
+    }
+    case 'prompt': {
+      const cfg = v2.config as PromptNodeConfig
+      return {
+        id: v2.id,
+        type: 'prompt',
+        position: v2.position,
+        data: {
+          message: cfg.message,
+          promptType: cfg.type,
+          options: cfg.options,
+          default: cfg.default,
+          variable: cfg.variable,
+          timeout: cfg.timeout,
+          configured: !!cfg.message && !!cfg.variable,
+        } satisfies PromptNodeData,
+      }
+    }
+    case 'set-variable': {
+      const cfg = v2.config as SetVariableNodeConfig
+      return {
+        id: v2.id,
+        type: 'set-variable',
+        position: v2.position,
+        data: {
+          variable: cfg.variable,
+          value: cfg.value,
+          configured: !!cfg.variable && !!cfg.value,
+        } satisfies SetVariableNodeData,
       }
     }
     default:

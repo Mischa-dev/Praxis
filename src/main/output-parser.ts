@@ -11,7 +11,6 @@ import { readFileSync } from 'fs'
 import { XMLParser } from 'fast-xml-parser'
 import type { ModuleOutput, OutputPattern } from '@shared/types/module'
 import type { ParsedResults } from '@shared/types/results'
-import type { ServiceProtocol, ServiceState } from '@shared/types/target'
 import { extractEntities, type ExtractedEntity } from './entity-extractor'
 
 // ---------------------------------------------------------------------------
@@ -77,7 +76,7 @@ export function parseOutput(
       parseRegex(textToParse, moduleOutput, results)
       break
     case 'greppable':
-      parseGreppable(textToParse, results)
+      // Greppable format parsing is profile-specific — falls through to raw
       break
     case 'raw':
     default:
@@ -96,7 +95,7 @@ export function parseOutput(
 }
 
 // ---------------------------------------------------------------------------
-// XML Parser (for nmap XML, etc.)
+// XML Parser
 // ---------------------------------------------------------------------------
 
 function parseXml(text: string, config: ModuleOutput, results: ParsedResults): void {
@@ -334,52 +333,6 @@ function applyRegexPattern(text: string, pattern: OutputPattern, results: Parsed
   }
 }
 
-// ---------------------------------------------------------------------------
-// Greppable Parser (nmap -oG format)
-// ---------------------------------------------------------------------------
-
-function parseGreppable(text: string, results: ParsedResults): void {
-  const lines = text.split('\n')
-
-  for (const line of lines) {
-    // Skip comments and status lines
-    if (line.startsWith('#') || !line.includes('Ports:')) continue
-
-    // Format: Host: <ip> (<hostname>)\tPorts: <port>/<state>/<proto>/<ignored>/<service>/<product>/<extrainfo>/
-    const hostMatch = line.match(/Host:\s+(\S+)\s*(?:\(([^)]*)\))?/)
-    const portsSection = line.match(/Ports:\s+(.+?)(?:\t|$)/)
-
-    if (!hostMatch) continue
-
-    if (portsSection) {
-      const portEntries = portsSection[1].split(',')
-      for (const entry of portEntries) {
-        const parts = entry.trim().split('/')
-        if (parts.length < 7) continue
-
-        const [portStr, state, protocol, , serviceName, product, version] = parts
-        const port = parseInt(portStr, 10)
-
-        if (isNaN(port) || state !== 'open') continue
-
-        addEntityToResults('service', {
-          port: String(port),
-          protocol: protocol || 'tcp',
-          state: state,
-          service_name: serviceName || undefined,
-          product: product || undefined,
-          service_version: version || undefined
-        }, results)
-      }
-    }
-
-    // Check for OS info
-    const osMatch = line.match(/OS:\s+(.+?)(?:\t|$)/)
-    if (osMatch) {
-      addEntityToResults('os', { os_guess: osMatch[1] }, results)
-    }
-  }
-}
 
 // ---------------------------------------------------------------------------
 // JSONPath evaluator (simplified)
@@ -622,6 +575,18 @@ function addEntityToResults(
   fields: Record<string, string | undefined>,
   results: ParsedResults
 ): void {
+  // Always store in generic entityRecords (schema-driven storage)
+  if (!results.entityRecords) results.entityRecords = {}
+  const records = results.entityRecords[entityType] ?? []
+  const cleanFields: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined) cleanFields[k] = v
+  }
+  records.push(cleanFields)
+  results.entityRecords[entityType] = records
+
+  // Legacy typed slots — kept for backward compatibility with scan-result-store
+  // and results UI during migration. Will be removed when those are genericized.
   switch (entityType) {
     case 'service': {
       const port = parseInt(fields.port ?? '0', 10)
@@ -630,8 +595,8 @@ function addEntityToResults(
         id: 0, // placeholder — DB assigns real ID
         target_id: 0,
         port,
-        protocol: (fields.protocol || 'tcp') as ServiceProtocol,
-        state: (fields.state || 'open') as ServiceState,
+        protocol: (fields.protocol || 'tcp') as 'tcp' | 'udp',
+        state: (fields.state || 'open') as 'open' | 'closed' | 'filtered',
         service_name: fields.service_name || null,
         product: fields.product || null,
         service_version: fields.service_version || null,

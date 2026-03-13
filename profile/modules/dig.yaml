@@ -2,7 +2,7 @@ id: dig
 name: "dig"
 description: "DNS lookup utility — query DNS records for domains and hostnames"
 category: network
-command: dig
+binary: dig
 tags: [dns, network, lookup, domain]
 
 arguments:
@@ -37,7 +37,7 @@ arguments:
     help: "Trace the delegation path from root servers"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: answer
       pattern: "^(\\S+)\\s+\\d+\\s+IN\\s+(\\w+)\\s+(.+)$"

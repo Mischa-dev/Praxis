@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { WorkflowSelector, WorkflowProgress } from '../workflows'
+import { WorkflowSelector } from '../workflows'
 import { useUiStore } from '../../stores/ui-store'
 import { useWorkflowStore } from '../../stores/workflow-store'
 import { usePipelineStore } from '../../stores/pipeline-store'

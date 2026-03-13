@@ -2,7 +2,7 @@ id: wget
 name: "wget"
 description: "Download files from the web via HTTP, HTTPS, or FTP"
 category: transfer
-command: wget
+binary: wget
 tags: [download, http, transfer, web]
 
 arguments:
@@ -49,4 +49,4 @@ arguments:
     help: "Timeout in seconds for network operations"
 
 output:
-  parser: lines
+  type: lines

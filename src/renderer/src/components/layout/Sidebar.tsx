@@ -87,9 +87,10 @@ interface PrimaryEntityInfo {
 
 /** Merge engine nav items with profile-declared views and schema primary entity */
 function buildNavItems(profileViews?: ProfileViewConfig[], primaryEntity?: PrimaryEntityInfo | null): NavItem[] {
-  const items = [...ENGINE_NAV_ITEMS]
+  let items = [...ENGINE_NAV_ITEMS]
 
-  // Replace the hardcoded 'Targets' nav item with schema-driven primary entity
+  // Replace the hardcoded 'Targets' nav item with schema-driven primary entity,
+  // or remove it entirely if no entity schema is loaded
   if (primaryEntity) {
     const idx = items.findIndex((i) => i.id === 'targets')
     if (idx >= 0) {
@@ -101,6 +102,9 @@ function buildNavItems(profileViews?: ProfileViewConfig[], primaryEntity?: Prima
         order: 20,
       }
     }
+  } else {
+    // No entity schema — hide the targets nav item entirely
+    items = items.filter((i) => i.id !== 'targets')
   }
 
   if (profileViews) {

@@ -2,7 +2,6 @@
 
 import { readFileSync, existsSync } from 'fs'
 import { join, resolve } from 'path'
-import { app } from 'electron'
 import * as yaml from 'js-yaml'
 import { validateManifest } from '@shared/schemas/manifest-schema'
 import type { ProfileManifest, ProfilePaths } from '@shared/types/profile'
@@ -24,6 +23,12 @@ let cachedManifest: ProfileManifest | null = null
 let cachedGlossary: GlossaryTerm[] | null = null
 let cachedEntitySchema: ResolvedSchema | null = null
 let resolvedPaths: ResolvedProfilePaths | null = null
+let overrideProfileRoot: string | null = null
+
+/** Override the profile root directory (used by CLI mode). */
+export function setProfileRoot(path: string): void {
+  overrideProfileRoot = path
+}
 
 /**
  * Determine the profile root directory.
@@ -32,8 +37,15 @@ let resolvedPaths: ResolvedProfilePaths | null = null
  * In production: <resources>/profile
  */
 function getProfileRoot(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'profile')
+  if (overrideProfileRoot) return overrideProfileRoot
+
+  try {
+    const { app } = require('electron')
+    if (app.isPackaged) {
+      return join(process.resourcesPath, 'profile')
+    }
+  } catch {
+    // Not in Electron (CLI mode) — fall through to __dirname-based resolution
   }
   // In dev, __dirname is out/main/ — go up 2 levels to project root
   return join(__dirname, '..', '..', 'profile')

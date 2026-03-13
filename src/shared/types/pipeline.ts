@@ -80,7 +80,7 @@ export interface Pipeline {
 // Pipeline Node Types (v2 discriminated union)
 // ---------------------------------------------------------------------------
 
-export type PipelineNodeType = 'tool' | 'condition' | 'for-each' | 'delay' | 'note' | 'start'
+export type PipelineNodeType = 'tool' | 'condition' | 'for-each' | 'delay' | 'note' | 'start' | 'shell' | 'prompt' | 'set-variable'
 
 /** Tool node — executes a CLI tool module */
 export interface ToolNodeConfig {
@@ -88,6 +88,7 @@ export interface ToolNodeConfig {
   args: Record<string, unknown>
   onFailure?: StepFailureAction
   timeout?: number
+  captureOutput?: { variable: string; mode: 'full' | 'last_line' | 'regex' | 'json'; pattern?: string }
 }
 
 /** Condition node — evaluates expression and routes to true/false branch */
@@ -117,9 +118,34 @@ export interface NoteNodeConfig {
 
 /** Start node — entry point that sets target context */
 export interface StartNodeConfig {
-  targetSource: 'selected' | 'all-in-scope'
+  targetSource?: 'selected' | 'all-in-scope'
   targetId?: number
   label?: string
+}
+
+/** Shell node — runs an arbitrary shell command */
+export interface ShellNodeConfig {
+  command: string
+  cwd?: string
+  timeout?: number
+  onFailure?: StepFailureAction
+  captureOutput?: { variable: string; mode: 'full' | 'last_line' | 'regex' | 'json'; pattern?: string }
+}
+
+/** Prompt node — pauses execution to ask user for input */
+export interface PromptNodeConfig {
+  message: string
+  type: 'confirm' | 'text' | 'select'
+  options?: string[]
+  default?: string
+  variable: string
+  timeout?: number
+}
+
+/** Set-variable node — sets a variable in the execution context */
+export interface SetVariableNodeConfig {
+  variable: string
+  value: string
 }
 
 /** Map of node type to its config interface */
@@ -130,6 +156,9 @@ export interface PipelineNodeConfigMap {
   delay: DelayNodeConfig
   note: NoteNodeConfig
   start: StartNodeConfig
+  shell: ShellNodeConfig
+  prompt: PromptNodeConfig
+  'set-variable': SetVariableNodeConfig
 }
 
 /** V2 pipeline node with discriminated type field */
@@ -200,9 +229,10 @@ export interface PipelineRun {
   runId: string
   pipelineId: number | string
   pipelineName: string
-  targetId: number
+  targetId?: number
   status: PipelineRunStatus
   nodes: PipelineNodeRun[]
   startedAt: string
   completedAt?: string
+  variables?: Record<string, unknown>
 }

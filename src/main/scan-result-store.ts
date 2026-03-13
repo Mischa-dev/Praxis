@@ -108,6 +108,7 @@ export async function getScanParsedResults(scanId: number): Promise<ParsedResult
       webPaths: [],
       findings: []
     },
+    entityRecords: {},
     raw: rawOutput || '',
     summary: scan.status === 'running' ? 'Scan in progress...' : 'No results available'
   }
@@ -135,10 +136,17 @@ function resolveFileOutputPath(
   scan: Scan
 ): string | undefined {
   if (!template) return undefined
-  return template
+  const resolved = template
     .replace(/\{scanId\}/g, String(scan.id))
     .replace(/\{targetValue\}/g, '')
     .replace(/\{timestamp\}/g, new Date().toISOString().replace(/[:.]/g, '-'))
+
+  // Guard against path traversal — reject paths containing ..
+  if (resolved.includes('..')) {
+    console.warn(`Rejected file_output path with traversal: ${resolved}`)
+    return undefined
+  }
+  return resolved
 }
 
 // ---------------------------------------------------------------------------
@@ -152,13 +160,14 @@ function storeEntities(scan: Scan, parsed: ParsedResults, toolId: string): void 
   // Can't store entities without a target
   if (!targetId) return
 
-  // Try generic entity storage first (if entity schema is available)
+  // Generic entity storage requires the entity schema
   const schema = db.getEntitySchema()
-  if (schema) {
-    storeEntitiesGeneric(db, schema, scan, parsed, toolId, targetId)
-  } else {
-    storeEntitiesLegacy(db, scan, parsed, toolId, targetId)
+  if (!schema) {
+    console.warn('Entity schema not loaded — cannot store parsed entities from scan', scan.id)
+    return
   }
+
+  storeEntitiesGeneric(db, schema, scan, parsed, toolId, targetId)
 }
 
 /** Generic entity storage using schema-driven CRUD */
@@ -238,112 +247,3 @@ function storeEntitiesGeneric(
   }
 }
 
-/** Legacy entity storage using typed database methods */
-function storeEntitiesLegacy(
-  db: import('./database').WorkspaceDatabase,
-  scan: Scan,
-  parsed: ParsedResults,
-  toolId: string,
-  targetId: number
-): void {
-  // Store services
-  for (const svc of parsed.entities.services) {
-    try {
-      db.addService({
-        target_id: targetId,
-        port: svc.port,
-        protocol: svc.protocol,
-        state: svc.state,
-        service_name: svc.service_name ?? undefined,
-        product: svc.product ?? undefined,
-        service_version: svc.service_version ?? undefined,
-        banner: svc.banner ?? undefined,
-        tunnel: svc.tunnel ?? undefined,
-        confidence: svc.confidence,
-        discovered_by: toolId
-      })
-    } catch (err) {
-      console.warn(`Failed to store service from scan ${scan.id}:`, err)
-    }
-  }
-
-  // Store vulnerabilities
-  for (const vuln of parsed.entities.vulnerabilities) {
-    try {
-      db.addVulnerability({
-        target_id: targetId,
-        scan_id: scan.id,
-        title: vuln.title,
-        severity: vuln.severity,
-        cve: vuln.cve ?? undefined,
-        description: vuln.description ?? undefined,
-        evidence: vuln.evidence ?? undefined,
-        discovered_by: toolId
-      })
-    } catch (err) {
-      console.warn(`Failed to store vulnerability from scan ${scan.id}:`, err)
-    }
-  }
-
-  // Store credentials
-  for (const cred of parsed.entities.credentials) {
-    try {
-      db.addCredential({
-        target_id: targetId,
-        scan_id: scan.id,
-        username: cred.username,
-        password: cred.password ?? undefined,
-        hash: cred.hash ?? undefined,
-        hash_type: cred.hash_type ?? undefined,
-        source: toolId
-      })
-    } catch (err) {
-      console.warn(`Failed to store credential from scan ${scan.id}:`, err)
-    }
-  }
-
-  // Store web paths
-  for (const wp of parsed.entities.webPaths) {
-    try {
-      db.addWebPath({
-        target_id: targetId,
-        scan_id: scan.id,
-        path: wp.path,
-        status_code: wp.status_code || undefined,
-        content_length: wp.content_length ?? undefined,
-        title: wp.title ?? undefined,
-        redirect_url: wp.redirect_url ?? undefined,
-        discovered_by: toolId
-      })
-    } catch (err) {
-      console.warn(`Failed to store web path from scan ${scan.id}:`, err)
-    }
-  }
-
-  // Store findings
-  for (const finding of parsed.entities.findings) {
-    try {
-      db.addFinding({
-        target_id: targetId,
-        scan_id: scan.id,
-        type: finding.type ?? undefined,
-        title: finding.title,
-        description: finding.description ?? undefined,
-        severity: finding.severity,
-        data: finding.data ?? undefined
-      })
-    } catch (err) {
-      console.warn(`Failed to store finding from scan ${scan.id}:`, err)
-    }
-  }
-
-  // Update target OS guess from os_detection findings
-  const osFindings = parsed.entities.findings.filter((f) => f.type === 'os_detection')
-  if (osFindings.length > 0 && osFindings[0].description) {
-    try {
-      db.updateTarget(targetId, { os_guess: osFindings[0].description })
-    } catch {
-      // Non-critical — OS guess is supplementary
-    }
-  }
-}

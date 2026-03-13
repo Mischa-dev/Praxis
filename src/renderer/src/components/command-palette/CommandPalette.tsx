@@ -192,7 +192,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         meta: category ?? undefined,
         onSelect: () => {
           setActiveEntity(entity.id)
-          navigate('entity-detail', { entityId: entity.id })
+          navigate('entity-detail-view', { entityType: primaryEntityType, entityId: entity.id })
           onClose()
         },
       })

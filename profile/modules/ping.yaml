@@ -2,7 +2,7 @@ id: ping
 name: "Ping"
 description: "Send ICMP echo requests to test network connectivity"
 category: network
-command: ping
+binary: ping
 tags: [network, connectivity, icmp, diagnostics]
 
 arguments:
@@ -36,7 +36,7 @@ arguments:
     help: "Size of data payload in bytes (default: 56)"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: rtt_stats
       pattern: "rtt min/avg/max/mdev = ([\\d.]+)/([\\d.]+)/([\\d.]+)/([\\d.]+)"

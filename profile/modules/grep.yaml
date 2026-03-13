@@ -2,7 +2,7 @@ id: grep
 name: "grep"
 description: "Search file contents for lines matching a pattern"
 category: text
-command: grep
+binary: grep
 tags: [search, text, pattern, regex]
 
 arguments:
@@ -66,4 +66,4 @@ arguments:
     help: "Skip directories matching this pattern (e.g. node_modules)"
 
 output:
-  parser: lines
+  type: lines

@@ -2,7 +2,7 @@ id: wc
 name: "wc"
 description: "Count lines, words, and characters in files"
 category: text
-command: wc
+binary: wc
 tags: [text, count, lines, words]
 
 arguments:
@@ -34,7 +34,7 @@ arguments:
     help: "Print only the byte count"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: counts
       pattern: "^\\s*(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(.+)$"

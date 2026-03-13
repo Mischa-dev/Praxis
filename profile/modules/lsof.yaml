@@ -2,7 +2,7 @@ id: lsof
 name: "lsof"
 description: "List open files and the processes using them"
 category: system
-command: lsof
+binary: lsof
 tags: [files, processes, system, diagnostics]
 
 arguments:
@@ -33,4 +33,4 @@ arguments:
     help: "Show only listening TCP sockets"
 
 output:
-  parser: lines
+  type: lines

@@ -12,7 +12,7 @@ import type { Module, ModuleArgument, FlagSeparator } from '@shared/types/module
 export type SegmentRole = 'binary' | 'flag' | 'value' | 'positional' | 'separator'
 
 export interface CommandSegment {
-  /** The text to display (e.g. "nmap", "-sS", "192.168.1.1") */
+  /** The text to display (e.g. "curl", "-X", "https://example.com") */
   text: string
   /** Semantic role for syntax highlighting */
   role: SegmentRole
@@ -120,7 +120,7 @@ export function buildCommand(
       continue
     }
 
-    // Select with flag_separator "none" — the value IS the flag (e.g. nmap scan types: -sS)
+    // Select with flag_separator "none" — the value IS the flag (e.g. -sS, -v)
     if (arg.type === 'select' && arg.flag_separator === 'none' && !arg.flag) {
       flagged.push({
         text: String(val),

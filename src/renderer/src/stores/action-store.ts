@@ -26,7 +26,7 @@ export const useActionStore = create<ActionState & ActionActions>((set) => ({
   loadActions: async (targetId: number) => {
     try {
       set({ loading: true, error: null, targetId })
-      const actions = (await window.api.invoke('target:actions', { targetId })) as EvaluatedAction[]
+      const actions = (await window.api.invoke('entity:actions', { entityType: 'host', id: targetId })) as EvaluatedAction[]
       set({ actions, loading: false })
     } catch (err) {
       set({

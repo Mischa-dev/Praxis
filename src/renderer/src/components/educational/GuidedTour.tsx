@@ -14,7 +14,7 @@ import { Button } from '../common'
 import { useProfileStore, selectAppName, selectTagline } from '../../stores/profile-store'
 import { useUiStore } from '../../stores/ui-store'
 
-const TOUR_STORAGE_KEY = 'aeth0n-tour-completed'
+const TOUR_STORAGE_KEY = 'praxis-tour-completed'
 
 interface TourStep {
   title: string

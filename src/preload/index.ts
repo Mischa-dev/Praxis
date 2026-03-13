@@ -40,6 +40,7 @@ const INVOKE_CHANNELS = [
   'pipeline:execute',
   'pipeline:cancel-run',
   'pipeline:run-status',
+  'pipeline:prompt-response',
   // Command History
   'history:list',
   // Profile
@@ -77,7 +78,8 @@ const EVENT_CHANNELS = [
   'tool:output',
   'tool:status',
   'workflow:step-status',
-  'pipeline:node-status'
+  'pipeline:node-status',
+  'pipeline:prompt'
 ] as const
 
 type InvokeChannel = (typeof INVOKE_CHANNELS)[number]

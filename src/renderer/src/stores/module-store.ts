@@ -21,8 +21,8 @@ function fuzzyScore(target: string, query: string): number {
   return score + (lower.indexOf(q[0]) ?? 0)
 }
 
-const FAVORITES_KEY = 'aeth0n:module-favorites'
-const RECENTS_KEY = 'aeth0n:module-recents'
+const FAVORITES_KEY = 'praxis:module-favorites'
+const RECENTS_KEY = 'praxis:module-recents'
 const MAX_RECENTS = 10
 
 function loadFromStorage<T>(key: string, fallback: T): T {

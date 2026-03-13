@@ -18,20 +18,15 @@ export type ArgumentType =
   | 'port'
   | 'ip'
   | 'range'
+  | 'positional'
+  | 'flag'
 
 export type FlagSeparator = 'space' | 'equals' | 'none'
 
-export type OutputType = 'raw' | 'xml' | 'json' | 'jsonl' | 'csv' | 'regex' | 'greppable' | 'custom'
+export type OutputType = 'raw' | 'xml' | 'json' | 'jsonl' | 'csv' | 'regex' | 'lines' | 'greppable' | 'custom'
 
-export type EntityType =
-  | 'host'
-  | 'service'
-  | 'vulnerability'
-  | 'credential'
-  | 'web_path'
-  | 'finding'
-  | 'os'
-  | 'dns_record'
+/** Entity type is a string matching an entity defined in profile/schema.yaml */
+export type EntityType = string
 
 export interface ModuleArgumentOption {
   value: string

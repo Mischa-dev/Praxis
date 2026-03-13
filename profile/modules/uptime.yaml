@@ -2,13 +2,13 @@ id: uptime
 name: "uptime"
 description: "Show how long the system has been running and current load averages"
 category: system
-command: uptime
+binary: uptime
 tags: [system, uptime, load, status]
 
 arguments: []
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: uptime
       pattern: "up\\s+(.+?),\\s+\\d+ user"

@@ -71,6 +71,7 @@
 
   /* Status colors */
   --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-error: var(--error);
 
   /* Shadows */
@@ -115,6 +116,7 @@
   /* Semantic colors */
   --accent-purple: #a855f7;
   --success: #22c55e;
+  --warning: #f59e0b;
   --error: #ef4444;
 
   /* Theme accent colors — Terminal Green (default) */

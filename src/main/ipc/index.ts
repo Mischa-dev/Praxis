@@ -8,7 +8,6 @@ import { registerWindowHandlers } from './window-handlers'
 import { registerScopeHandlers } from './scope-handlers'
 import { registerToolHandlers } from './tool-handlers'
 import { registerScanHandlers } from './scan-handlers'
-import { registerActionHandlers } from './action-handlers'
 import { registerWorkflowHandlers } from './workflow-handlers'
 import { registerPipelineHandlers } from './pipeline-handlers'
 import { registerPipelineRunHandlers } from './pipeline-run-handlers'
@@ -33,7 +32,6 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   registerScopeHandlers(ipcMain)
   registerToolHandlers(ipcMain)
   registerScanHandlers(ipcMain)
-  registerActionHandlers(ipcMain)
   registerWorkflowHandlers(ipcMain)
   registerPipelineHandlers(ipcMain)
   registerPipelineRunHandlers(ipcMain)

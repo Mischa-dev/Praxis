@@ -13,7 +13,7 @@ export default function Entities(): React.JSX.Element {
 
   const handleEntityClick = (entity: EntityRecord): void => {
     setActiveEntity(entity.id)
-    navigate('entity-detail', { entityType: primaryType?.id, entityId: entity.id })
+    navigate('entity-detail-view', { entityType: primaryType?.id, entityId: entity.id })
   }
 
   if (!primaryType) {

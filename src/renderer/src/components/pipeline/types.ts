@@ -49,10 +49,37 @@ export interface NoteNodeData extends BaseNodeData {
 
 /** Start node — pipeline entry point */
 export interface StartNodeData extends BaseNodeData {
-  targetSource: 'selected' | 'all-in-scope'
+  targetSource?: 'selected' | 'all-in-scope'
   targetId?: number
   targetLabel?: string
   label?: string
+}
+
+/** Shell node — runs an arbitrary shell command */
+export interface ShellNodeData extends BaseNodeData {
+  command: string
+  cwd?: string
+  timeout?: number
+  onFailure?: StepFailureAction
+  captureVariable?: string
+  captureMode?: 'full' | 'last_line' | 'regex' | 'json'
+  capturePattern?: string
+}
+
+/** Prompt node — pauses execution to ask user for input */
+export interface PromptNodeData extends BaseNodeData {
+  message: string
+  promptType: 'confirm' | 'text' | 'select'
+  options?: string[]
+  default?: string
+  variable: string
+  timeout?: number
+}
+
+/** Set-variable node — sets a variable in the execution context */
+export interface SetVariableNodeData extends BaseNodeData {
+  variable: string
+  value: string
 }
 
 /** Union of all node data types */
@@ -63,3 +90,6 @@ export type AnyNodeData =
   | DelayNodeData
   | NoteNodeData
   | StartNodeData
+  | ShellNodeData
+  | PromptNodeData
+  | SetVariableNodeData

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import type { Node } from '@xyflow/react'
 import { Button, Dialog } from '../common'
 import type { Module } from '@shared/types'
-import type { ToolNodeData, ConditionNodeData, ForEachNodeData, DelayNodeData, StartNodeData, NoteNodeData } from './types'
+import type { ToolNodeData, ConditionNodeData, ForEachNodeData, DelayNodeData, StartNodeData, NoteNodeData, ShellNodeData, PromptNodeData, SetVariableNodeData } from './types'
 import { useEntityStore, selectPrimaryType } from '../../stores/entity-store'
 import { getDisplayValue } from '../../lib/schema-utils'
 import type { EntityRecord } from '@shared/types/entity'
@@ -406,6 +406,319 @@ export function NoteConfigDialog({
       <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
         <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
         <Button size="sm" onClick={() => { onSave({ content, color }); onClose() }}>
+          Apply
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Shell config dialog
+// ---------------------------------------------------------------------------
+
+export function ShellConfigDialog({
+  node,
+  onClose,
+  onSave,
+}: {
+  node: Node
+  onClose: () => void
+  onSave: (data: Partial<ShellNodeData>) => void
+}) {
+  const data = node.data as unknown as ShellNodeData
+  const [command, setCommand] = useState(data.command ?? '')
+  const [cwd, setCwd] = useState(data.cwd ?? '')
+  const [timeout, setTimeout_] = useState(data.timeout ?? 0)
+  const [onFailure, setOnFailure] = useState(data.onFailure ?? 'skip')
+  const [captureVariable, setCaptureVariable] = useState(data.captureVariable ?? '')
+  const [captureMode, setCaptureMode] = useState(data.captureMode ?? 'full')
+  const [capturePattern, setCapturePattern] = useState(data.capturePattern ?? '')
+
+  return (
+    <Dialog open onClose={onClose} title="Configure Shell Command">
+      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            Command <span className="text-red-400">*</span>
+          </label>
+          <textarea
+            className="w-full bg-bg-input border border-border rounded px-3 py-2 text-sm text-text-primary font-mono placeholder:text-text-muted focus:border-accent-primary focus:outline-none resize-y min-h-[60px]"
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="e.g., curl -s https://api.example.com/data"
+            rows={3}
+          />
+          <p className="text-[10px] text-text-muted mt-1">
+            Supports {'${'} template expressions. Example: {'${vars.url}'} or {'${nodes.prev.output}'}
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">Working Directory</label>
+          <input
+            className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:border-accent-primary focus:outline-none"
+            value={cwd}
+            onChange={(e) => setCwd(e.target.value)}
+            placeholder="(default: inherit)"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Timeout (seconds)</label>
+            <input
+              type="number"
+              min={0}
+              className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+              value={timeout}
+              onChange={(e) => setTimeout_(Math.max(0, parseInt(e.target.value) || 0))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">On Failure</label>
+            <select
+              className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+              value={onFailure}
+              onChange={(e) => setOnFailure(e.target.value as 'skip' | 'abort' | 'retry')}
+            >
+              <option value="skip">Skip & continue</option>
+              <option value="abort">Abort pipeline</option>
+              <option value="retry">Retry once</option>
+            </select>
+          </div>
+        </div>
+        <div className="border-t border-border pt-3">
+          <label className="block text-xs text-text-secondary mb-1">Capture Output → Variable</label>
+          <input
+            className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:border-accent-primary focus:outline-none"
+            value={captureVariable}
+            onChange={(e) => setCaptureVariable(e.target.value)}
+            placeholder="Variable name (e.g., api_response)"
+          />
+          {captureVariable && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-text-muted mb-1">Capture Mode</label>
+                <select
+                  className="w-full bg-bg-input border border-border rounded px-2 py-1 text-xs text-text-primary focus:border-accent-primary focus:outline-none"
+                  value={captureMode}
+                  onChange={(e) => setCaptureMode(e.target.value as 'full' | 'last_line' | 'regex' | 'json')}
+                >
+                  <option value="full">Full output</option>
+                  <option value="last_line">Last line</option>
+                  <option value="regex">Regex match</option>
+                  <option value="json">JSON parse</option>
+                </select>
+              </div>
+              {(captureMode === 'regex' || captureMode === 'json') && (
+                <div>
+                  <label className="block text-[10px] text-text-muted mb-1">
+                    {captureMode === 'regex' ? 'Pattern' : 'JSON path'}
+                  </label>
+                  <input
+                    className="w-full bg-bg-input border border-border rounded px-2 py-1 text-xs text-text-primary font-mono focus:border-accent-primary focus:outline-none"
+                    value={capturePattern}
+                    onChange={(e) => setCapturePattern(e.target.value)}
+                    placeholder={captureMode === 'regex' ? '(.+)' : 'data.result'}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
+        <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+        <Button size="sm" onClick={() => {
+          onSave({
+            command,
+            cwd: cwd || undefined,
+            timeout: timeout || undefined,
+            onFailure: onFailure as 'skip' | 'abort' | 'retry',
+            captureVariable: captureVariable || undefined,
+            captureMode: captureVariable ? captureMode : undefined,
+            capturePattern: captureVariable && capturePattern ? capturePattern : undefined,
+          })
+          onClose()
+        }} disabled={!command.trim()}>
+          Apply
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Prompt config dialog
+// ---------------------------------------------------------------------------
+
+export function PromptConfigDialog({
+  node,
+  onClose,
+  onSave,
+}: {
+  node: Node
+  onClose: () => void
+  onSave: (data: Partial<PromptNodeData>) => void
+}) {
+  const data = node.data as unknown as PromptNodeData
+  const [message, setMessage] = useState(data.message ?? '')
+  const [promptType, setPromptType] = useState<'confirm' | 'text' | 'select'>(data.promptType ?? 'text')
+  const [variable, setVariable] = useState(data.variable ?? '')
+  const [defaultVal, setDefaultVal] = useState(data.default ?? '')
+  const [options, setOptions] = useState(data.options?.join('\n') ?? '')
+  const [timeout, setTimeout_] = useState(data.timeout ?? 0)
+
+  return (
+    <Dialog open onClose={onClose} title="Configure Prompt">
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            Message <span className="text-red-400">*</span>
+          </label>
+          <textarea
+            className="w-full bg-bg-input border border-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none resize-y min-h-[50px]"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="What would you like to ask?"
+            rows={2}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Type</label>
+            <select
+              className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+              value={promptType}
+              onChange={(e) => setPromptType(e.target.value as 'confirm' | 'text' | 'select')}
+            >
+              <option value="text">Text input</option>
+              <option value="confirm">Yes / No</option>
+              <option value="select">Select from list</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">
+              Variable Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:border-accent-primary focus:outline-none"
+              value={variable}
+              onChange={(e) => setVariable(e.target.value)}
+              placeholder="user_input"
+            />
+          </div>
+        </div>
+        {promptType === 'select' && (
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Options (one per line)</label>
+            <textarea
+              className="w-full bg-bg-input border border-border rounded px-3 py-2 text-sm text-text-primary font-mono placeholder:text-text-muted focus:border-accent-primary focus:outline-none resize-y min-h-[60px]"
+              value={options}
+              onChange={(e) => setOptions(e.target.value)}
+              placeholder="Option 1&#10;Option 2&#10;Option 3"
+              rows={3}
+            />
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Default Value</label>
+            <input
+              className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+              value={defaultVal}
+              onChange={(e) => setDefaultVal(e.target.value)}
+              placeholder="(none)"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Timeout (seconds)</label>
+            <input
+              type="number"
+              min={0}
+              className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary focus:border-accent-primary focus:outline-none"
+              value={timeout}
+              onChange={(e) => setTimeout_(Math.max(0, parseInt(e.target.value) || 0))}
+            />
+            <p className="text-[10px] text-text-muted mt-0.5">0 = wait forever</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
+        <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+        <Button size="sm" onClick={() => {
+          onSave({
+            message,
+            promptType,
+            variable,
+            default: defaultVal || undefined,
+            options: promptType === 'select' ? options.split('\n').filter((o) => o.trim()) : undefined,
+            timeout: timeout || undefined,
+          })
+          onClose()
+        }} disabled={!message.trim() || !variable.trim()}>
+          Apply
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Set-variable config dialog
+// ---------------------------------------------------------------------------
+
+export function SetVariableConfigDialog({
+  node,
+  onClose,
+  onSave,
+}: {
+  node: Node
+  onClose: () => void
+  onSave: (data: Partial<SetVariableNodeData>) => void
+}) {
+  const data = node.data as unknown as SetVariableNodeData
+  const [variable, setVariable] = useState(data.variable ?? '')
+  const [value, setValue] = useState(data.value ?? '')
+
+  return (
+    <Dialog open onClose={onClose} title="Configure Set Variable">
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            Variable Name <span className="text-red-400">*</span>
+          </label>
+          <input
+            className="w-full bg-bg-input border border-border rounded px-2 py-1.5 text-sm text-text-primary font-mono focus:border-accent-primary focus:outline-none"
+            value={variable}
+            onChange={(e) => setVariable(e.target.value)}
+            placeholder="my_variable"
+          />
+          <p className="text-[10px] text-text-muted mt-0.5">
+            Access later with {'${vars.my_variable}'}
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            Value Expression <span className="text-red-400">*</span>
+          </label>
+          <textarea
+            className="w-full bg-bg-input border border-border rounded px-3 py-2 text-sm text-text-primary font-mono placeholder:text-text-muted focus:border-accent-primary focus:outline-none resize-y min-h-[50px]"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="literal value or ${...} template"
+            rows={2}
+          />
+          <p className="text-[10px] text-text-muted mt-1">
+            Supports template expressions: {'${nodes.<id>.output}'}, {'${vars.other_var}'}, etc.
+          </p>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
+        <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+        <Button size="sm" onClick={() => {
+          onSave({ variable, value })
+          onClose()
+        }} disabled={!variable.trim() || !value.trim()}>
           Apply
         </Button>
       </div>

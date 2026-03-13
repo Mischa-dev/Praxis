@@ -2,7 +2,7 @@ id: ss
 name: "ss"
 description: "Socket statistics — show listening ports and active connections"
 category: network
-command: ss
+binary: ss
 tags: [network, sockets, ports, connections]
 
 arguments:
@@ -40,7 +40,7 @@ arguments:
     help: "Show both listening and non-listening sockets"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: socket
       pattern: "^(\\w+)\\s+\\w+\\s+\\d+\\s+\\d+\\s+(\\S+)\\s+(\\S+)"

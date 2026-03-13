@@ -41,8 +41,10 @@ function StartNodeComponent({ data, selected }: StartNodeProps) {
           <span className="font-mono">{targetLabel}</span>
         ) : targetSource === 'all-in-scope' ? (
           'All In-Scope'
-        ) : (
+        ) : targetSource === 'selected' ? (
           'Selected Target'
+        ) : (
+          'Pipeline Start'
         )}
       </div>
 

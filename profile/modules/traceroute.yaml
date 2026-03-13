@@ -2,7 +2,7 @@ id: traceroute
 name: "Traceroute"
 description: "Trace the network path to a remote host, showing each hop"
 category: network
-command: traceroute
+binary: traceroute
 tags: [network, routing, diagnostics, hops]
 
 arguments:
@@ -36,7 +36,7 @@ arguments:
     help: "Do not resolve IP addresses to hostnames"
 
 output:
-  parser: regex
+  type: regex
   patterns:
     - name: hop
       pattern: "^\\s*(\\d+)\\s+(\\S+)\\s+\\((\\S+)\\)\\s+([\\d.]+)\\s+ms"

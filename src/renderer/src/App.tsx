@@ -30,7 +30,7 @@ class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[Aeth0n] React error boundary caught:', error, info.componentStack)
+    console.error('[Praxis] React error boundary caught:', error, info.componentStack)
     this.setState({ componentStack: info.componentStack ?? null })
   }
 

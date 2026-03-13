@@ -1,16 +1,13 @@
 /**
  * Generic entity IPC handlers — schema-driven CRUD for all profile-defined entities.
- *
- * These handlers work alongside the existing domain-specific handlers (target, scan, etc.)
- * during the migration period. Once migration is complete, the old handlers can be removed.
  */
 
 import type { IpcMain } from 'electron'
 import { getDatabase } from '../workspace-manager'
 import { getEntitySchema } from '../profile-loader'
-import { getActionsForTarget } from '../action-engine'
+import { getActionsForEntity } from '../action-engine'
 import { getResolvedPaths } from '../profile-loader'
-import type { EntityFilter, EntityRecord, ResolvedSchema } from '@shared/types/entity'
+import type { EntityFilter, ResolvedSchema } from '@shared/types/entity'
 
 /** Validate that an entity type exists in the schema (prevents SQL injection) */
 function requireValidEntityType(schema: ResolvedSchema, entityType: string): void {
@@ -122,7 +119,7 @@ export function registerEntityHandlers(ipcMain: IpcMain): void {
     return db.entityStats()
   })
 
-  // ── Entity actions (contextual suggestions for primary entities) ──
+  // ── Entity actions (contextual suggestions for entities) ──
   ipcMain.handle(
     'entity:actions',
     async (_event, data: { entityType: string; id: number }) => {
@@ -130,53 +127,21 @@ export function registerEntityHandlers(ipcMain: IpcMain): void {
       if (!schema) throw new Error('Entity schema not loaded')
       requireValidEntityType(schema, data.entityType)
 
-      // Actions only apply to the primary entity type (or entities with children)
       const db = getDatabase()
       const detail = db.entityGetDetail(data.entityType, data.id)
       if (!detail) return []
 
-      // Use the existing action engine — build a TargetDetail-like object
-      // This bridges the generic entity system with the existing action engine
-      // during the transition period
       const paths = getResolvedPaths()
       try {
-        const targetDetail = bridgeToTargetDetail(detail.entity, detail.children)
-        return getActionsForTarget(paths.actions, targetDetail)
+        return getActionsForEntity(
+          paths.actions,
+          data.entityType,
+          detail.entity,
+          detail.children
+        )
       } catch {
         return []
       }
     }
   )
-}
-
-/**
- * Bridge a generic EntityDetail to the existing TargetDetail format.
- * This allows the existing action engine to work with generic entities
- * during the transition period. Will be removed when action engine is
- * fully genericized (Phase 4).
- */
-function bridgeToTargetDetail(
-  entity: EntityRecord,
-  children: Record<string, EntityRecord[]>
-): import('@shared/types/target').TargetDetail {
-  return {
-    id: entity.id,
-    type: String(entity.type ?? 'ip') as import('@shared/types/target').TargetType,
-    value: String(entity.value ?? ''),
-    label: entity.label as string | null ?? null,
-    os_guess: entity.os_guess as string | null ?? null,
-    scope_status: (entity.scope_status ?? 'unchecked') as import('@shared/types/target').ScopeStatus,
-    tags: entity.tags as string ?? '[]',
-    notes: entity.notes as string | null ?? null,
-    status: (entity.status ?? 'new') as import('@shared/types/target').TargetStatus,
-    created_at: entity.created_at as string ?? '',
-    updated_at: entity.updated_at as string ?? '',
-    services: (children.service ?? []) as unknown as import('@shared/types/target').Service[],
-    vulnerabilities: (children.vulnerability ?? []) as unknown as import('@shared/types/results').Vulnerability[],
-    credentials: (children.credential ?? []) as unknown as import('@shared/types/results').Credential[],
-    web_paths: (children.web_path ?? []) as unknown as import('@shared/types/results').WebPath[],
-    findings: (children.finding ?? []) as unknown as import('@shared/types/results').Finding[],
-    scans: [],
-    notes_list: (children.note ?? []) as unknown as import('@shared/types/target').Note[]
-  }
 }

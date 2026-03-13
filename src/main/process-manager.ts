@@ -9,8 +9,8 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { mkdirSync, createWriteStream, type WriteStream } from 'fs'
 import { join } from 'path'
-import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { getUserDataPath } from './app-paths'
 import type { Scan, ScanStatus } from '@shared/types/scan'
 import type { ToolOutputEvent, ToolStatusEvent } from '@shared/types/ipc'
 import { getDatabase } from './workspace-manager'
@@ -148,6 +148,11 @@ function spawnProcess(req: SpawnRequest): void {
 
   let spawnBinary = binary
   let spawnArgs = [...args]
+
+  // When shell mode is enabled, escape arguments to prevent injection
+  if (shell) {
+    spawnArgs = spawnArgs.map(escapeShellArg)
+  }
 
   if (sudo) {
     spawnArgs = [binary, ...args]
@@ -355,5 +360,11 @@ function updateScanInDb(scanId: number, updates: ScanUpdates): void {
 }
 
 function getOutputDir(scanId: number): string {
-  return join(app.getPath('userData'), 'output', String(scanId))
+  return join(getUserDataPath(), 'output', String(scanId))
+}
+
+/** Escape a string for safe use as a shell argument */
+function escapeShellArg(arg: string): string {
+  // Wrap in single quotes, escaping any embedded single quotes
+  return "'" + arg.replace(/'/g, "'\\''") + "'"
 }
